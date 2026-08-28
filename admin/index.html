@@ -141,15 +141,34 @@
               border-radius: 0 0 14px 14px; }
   .dlg-foot #btnSave { padding: 8px 22px; font-weight: 600; }
 
-  /* 弹框分区 */
+  /* 弹框分区（单列布局：每个输入独占一行） */
   .section { margin-bottom: 20px; }
   .section:last-child { margin-bottom: 0; }
   .section > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
                   font-size: 12px; font-weight: 600; color: var(--muted);
                   text-transform: uppercase; letter-spacing: .5px; }
   .section > h3::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--primary); }
-  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-  .full { grid-column: 1 / -1; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+
+  /* 开关行 */
+  .opt-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+             border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px;
+             cursor: pointer; transition: border-color .12s, background .12s; }
+  .opt-row:hover { border-color: #cbd5e1; background: #f8fafc; }
+  .opt-row .opt-text { flex: 1; min-width: 0; }
+  .opt-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .opt-desc { font-size: 12px; color: var(--faint); margin-top: 1px; }
+  .switch { position: relative; width: 42px; height: 24px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch .slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 999px;
+                    transition: background .15s; }
+  .switch .slider::before { content: ""; position: absolute; width: 18px; height: 18px;
+                            left: 3px; top: 3px; background: #fff; border-radius: 50%;
+                            box-shadow: 0 1px 3px rgba(15,23,42,.25); transition: transform .15s; }
+  .switch input:checked + .slider { background: var(--primary); }
+  .switch input:checked + .slider::before { transform: translateX(18px); }
+  .switch input:focus-visible + .slider { box-shadow: 0 0 0 3px rgba(2,132,199,.2); }
 
   label { display: block; font-size: 12.5px; margin-bottom: 5px; font-weight: 600; color: #334155; }
   input[type=text], input[type=number] {
@@ -176,10 +195,6 @@
   .cron-presets button.active { background: var(--primary); border-color: var(--primary);
     color: #fff; font-weight: 600; }
   .hint { color: var(--faint); font-size: 11.5px; margin-top: 4px; }
-
-  .checks { display: flex; gap: 18px; align-self: end; padding-bottom: 9px; }
-  .checks label { font-weight: 400; margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; }
-  .checks input { accent-color: var(--primary); }
 
   /* ---------- 节点选择器 ---------- */
   .node-picker { border: 1px solid var(--border); border-radius: 8px; background: #fff; overflow: hidden; }
@@ -251,50 +266,59 @@
 
       <div class="section">
         <h3>基本信息</h3>
-        <div class="grid">
-          <div>
-            <label for="f_name">任务名称</label>
-            <input type="text" id="f_name" placeholder="例如: 每日磁盘清理" required>
+        <div class="field">
+          <label for="f_name">任务名称</label>
+          <input type="text" id="f_name" placeholder="例如: 每日磁盘清理" required>
+        </div>
+        <div class="field">
+          <label for="f_cron">执行周期</label>
+          <input type="text" id="f_cron" class="mono" placeholder="0 3 * * *" required>
+          <div class="cron-presets" id="cronPresets">
+            <button type="button" data-cron="@every 1m">每分钟</button>
+            <button type="button" data-cron="*/5 * * * *">每 5 分钟</button>
+            <button type="button" data-cron="0 * * * *">每小时</button>
+            <button type="button" data-cron="0 3 * * *">每天 3 点</button>
+            <button type="button" data-cron="0 4 * * 0">每周日 4 点</button>
           </div>
-          <div>
-            <label for="f_cron">执行周期</label>
-            <input type="text" id="f_cron" class="mono" placeholder="0 3 * * *" required>
-            <div class="cron-presets" id="cronPresets">
-              <button type="button" data-cron="@every 1m">每分钟</button>
-              <button type="button" data-cron="*/5 * * * *">每 5 分钟</button>
-              <button type="button" data-cron="0 * * * *">每小时</button>
-              <button type="button" data-cron="0 3 * * *">每天 3 点</button>
-              <button type="button" data-cron="0 4 * * 0">每周日 4 点</button>
-            </div>
-          </div>
-          <div class="full">
-            <label for="f_command">命令</label>
-            <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令" required></textarea>
-          </div>
+        </div>
+        <div class="field">
+          <label for="f_command">命令</label>
+          <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令" required></textarea>
         </div>
       </div>
 
       <div class="section">
         <h3>目标与执行选项</h3>
-        <div class="grid">
-          <div class="full">
-            <label>目标节点 <span class="hint" style="display:inline">已选 <b id="nodeCount">0</b> 个</span></label>
-            <div class="node-picker">
-              <div class="node-chips" id="nodeChips"><span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span></div>
-              <div class="node-search">
-                <input type="text" id="nodeFilter" placeholder="搜索节点…">
-              </div>
-              <div class="node-list" id="nodeList"></div>
+        <div class="field">
+          <label>目标节点 <span class="hint" style="display:inline">已选 <b id="nodeCount">0</b> 个</span></label>
+          <div class="node-picker">
+            <div class="node-chips" id="nodeChips"><span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span></div>
+            <div class="node-search">
+              <input type="text" id="nodeFilter" placeholder="搜索节点…">
             </div>
+            <div class="node-list" id="nodeList"></div>
           </div>
-          <div>
-            <label for="f_timeout">等待结果超时（秒）</label>
-            <input type="number" id="f_timeout" value="300" min="1" max="3600">
-          </div>
-          <div class="checks">
-            <label><input type="checkbox" id="f_notify" checked> 失败时通知</label>
-            <label><input type="checkbox" id="f_enabled" checked> 启用</label>
-          </div>
+        </div>
+        <div class="field">
+          <label for="f_timeout">等待结果超时（秒）</label>
+          <input type="number" id="f_timeout" value="300" min="1" max="3600">
+          <div class="hint">超过此时长仍未收到节点结果的，按超时部分结果结算</div>
+        </div>
+        <div class="field">
+          <label class="opt-row">
+            <span class="opt-text">
+              <span class="opt-title">失败时通知</span>
+              <span class="opt-desc">任一节点退出码非 0 或超时，通过已配置渠道发送告警</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="f_notify" checked><span class="slider"></span></span>
+          </label>
+          <label class="opt-row">
+            <span class="opt-text">
+              <span class="opt-title">启用任务</span>
+              <span class="opt-desc">停用后保留配置，不再定时触发</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="f_enabled" checked><span class="slider"></span></span>
+          </label>
         </div>
       </div>
     </div>
