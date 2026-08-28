@@ -8,7 +8,7 @@
   :root {
     --bg: #f1f5f9; --card: #fff; --border: #e2e8f0;
     --text: #0f172a; --muted: #64748b; --faint: #94a3b8;
-    --primary: #0284c7; --primary-soft: #e0f2fe;
+    --primary: #0284c7; --primary-deep: #0369a1; --primary-soft: #e0f2fe;
     --danger: #dc2626; --danger-soft: #fee2e2;
     --success: #16a34a; --success-soft: #dcfce7;
     --warn: #d97706; --warn-soft: #fef3c7;
@@ -31,16 +31,24 @@
 
   main { max-width: 1000px; margin: 24px auto 40px; padding: 0 20px; }
 
-  /* ---------- 通用 ---------- */
+  /* ---------- 按钮 ---------- */
   button { background: var(--primary); color: #fff; border: 0; border-radius: 8px;
-           padding: 7px 14px; font-size: 13px; cursor: pointer; transition: filter .12s; }
+           padding: 7px 14px; font-size: 13px; cursor: pointer; transition: filter .12s, background .12s; }
   button:hover { filter: brightness(1.08); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
   button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
   button.secondary:hover { background: #f8fafc; filter: none; }
-  button.danger { background: var(--danger); }
-  button.ghost { background: transparent; color: var(--primary); padding: 4px 8px; }
-  button.ghost:hover { background: var(--primary-soft); filter: none; }
-  button:disabled { opacity: .45; cursor: not-allowed; }
+  /* 行内操作按钮语义化配色 */
+  .btn-run { background: var(--primary); color: #fff; font-weight: 600; }
+  .btn-run:hover { background: var(--primary-deep); filter: none; }
+  .btn-pause { background: var(--warn-soft); color: var(--warn); font-weight: 600; border: 1px solid #fde68a; }
+  .btn-pause:hover { background: #fde68a; filter: none; }
+  .btn-resume { background: var(--success-soft); color: var(--success); font-weight: 600; border: 1px solid #bbf7d0; }
+  .btn-resume:hover { background: #bbf7d0; filter: none; }
+  button.ghost { background: transparent; color: var(--muted); padding: 4px 8px; }
+  button.ghost:hover { background: #f1f5f9; color: var(--text); filter: none; }
+  button.ghost.danger { color: var(--danger); }
+  button.ghost.danger:hover { background: var(--danger-soft); color: var(--danger); }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
           padding: 18px 20px; margin-bottom: 18px;
@@ -51,11 +59,11 @@
   .badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px;
            border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
   .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-  .badge.ok     { background: var(--success-soft); color: var(--success); }
-  .badge.fail   { background: var(--danger-soft);  color: var(--danger); }
-  .badge.warn   { background: var(--warn-soft);    color: var(--warn); }
-  .badge.on     { background: var(--success-soft); color: var(--success); }
-  .badge.off    { background: #f1f5f9;             color: var(--faint); }
+  .badge.ok   { background: var(--success-soft); color: var(--success); }
+  .badge.fail { background: var(--danger-soft);  color: var(--danger); }
+  .badge.warn { background: var(--warn-soft);    color: var(--warn); }
+  .badge.on   { background: var(--success-soft); color: var(--success); }
+  .badge.off  { background: #f1f5f9;             color: var(--faint); }
 
   .muted { color: var(--muted); }
   .mono  { font-family: var(--mono); }
@@ -78,7 +86,6 @@
   tr:hover td { background: #f8fafc; }
   .t-name { font-weight: 600; word-break: break-all; }
   .t-cron { color: var(--muted); font-size: 12px; font-family: var(--mono); margin-top: 1px; }
-  /* 命令列：自适应换行，最多两行，超出行数截断（悬停有 title 全文） */
   .t-cmd { font-family: var(--mono); font-size: 12px; background: #f8fafc; border: 1px solid #eef2f7;
            padding: 3px 8px; border-radius: 6px; display: -webkit-box; -webkit-box-orient: vertical;
            -webkit-line-clamp: 2; overflow: hidden; word-break: break-all;
@@ -88,8 +95,9 @@
                max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
                vertical-align: middle; }
   .node-pill.custom { background: var(--warn-soft); color: #92400e; font-family: var(--mono); font-size: 11px; }
-  .row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-  .row-actions button { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
+  .row-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .row-actions .btn-run, .row-actions .btn-pause, .row-actions .btn-resume { padding: 5px 12px; font-size: 12.5px; }
+  .row-actions button.ghost { font-size: 12.5px; }
 
   /* ---------- 历史记录 ---------- */
   .h-item { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px;
@@ -119,7 +127,7 @@
 
   /* ---------- 弹框 ---------- */
   dialog { border: 0; border-radius: 14px; padding: 0;
-           width: min(620px, calc(100vw - 32px));
+           width: min(640px, calc(100vw - 32px));
            box-shadow: 0 24px 64px rgba(15,23,42,.28); }
   dialog::backdrop { background: rgba(15, 23, 42, .45); backdrop-filter: blur(2px); }
   .dlg-head { display: flex; align-items: center; padding: 16px 22px;
@@ -131,17 +139,44 @@
   .dlg-foot { display: flex; justify-content: flex-end; gap: 8px;
               padding: 13px 22px; border-top: 1px solid var(--border); background: #f8fafc;
               border-radius: 0 0 14px 14px; }
+  .dlg-foot #btnSave { padding: 8px 22px; font-weight: 600; }
 
+  /* 弹框分区 */
+  .section { margin-bottom: 20px; }
+  .section:last-child { margin-bottom: 0; }
+  .section > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
+                  font-size: 12px; font-weight: 600; color: var(--muted);
+                  text-transform: uppercase; letter-spacing: .5px; }
+  .section > h3::before { content: ""; width: 3px; height: 12px; border-radius: 2px; background: var(--primary); }
   .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
   .full { grid-column: 1 / -1; }
+
   label { display: block; font-size: 12.5px; margin-bottom: 5px; font-weight: 600; color: #334155; }
-  input[type=text], input[type=number], textarea {
+  input[type=text], input[type=number] {
     width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px;
     font-size: 13px; font-family: inherit; background: #fff; transition: border-color .12s, box-shadow .12s; }
-  input:focus, textarea:focus { outline: none; border-color: var(--primary);
+  input:focus { outline: none; border-color: var(--primary);
     box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
-  textarea { resize: vertical; min-height: 72px; font-family: var(--mono); font-size: 12.5px; }
+
+  /* 命令编辑器：终端风格（与执行输出的深色块呼应） */
+  textarea.term { width: 100%; resize: vertical; min-height: 96px;
+    background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px;
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.6; padding: 10px 12px;
+    caret-color: #38bdf8; transition: border-color .12s, box-shadow .12s; }
+  textarea.term::placeholder { color: #475569; }
+  textarea.term:focus { outline: none; border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
+
+  /* cron 预设 */
+  .cron-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
+  .cron-presets button { font-size: 11.5px; padding: 2.5px 9px; border-radius: 999px;
+    background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
+  .cron-presets button:hover { background: var(--primary-soft); color: var(--primary-deep);
+    border-color: #bae6fd; filter: none; }
+  .cron-presets button.active { background: var(--primary); border-color: var(--primary);
+    color: #fff; font-weight: 600; }
   .hint { color: var(--faint); font-size: 11.5px; margin-top: 4px; }
+
   .checks { display: flex; gap: 18px; align-self: end; padding-bottom: 9px; }
   .checks label { font-weight: 400; margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; }
   .checks input { accent-color: var(--primary); }
@@ -213,37 +248,53 @@
     </div>
     <div class="dlg-body">
       <input type="hidden" id="f_id">
-      <div class="grid">
-        <div>
-          <label for="f_name">任务名称</label>
-          <input type="text" id="f_name" placeholder="例如: 每日磁盘清理" required>
-        </div>
-        <div>
-          <label for="f_cron">执行周期</label>
-          <input type="text" id="f_cron" placeholder="0 3 * * *" value="0 3 * * *" required>
-          <div class="hint">cron 五字段，或 @every 1m / @every 2h</div>
-        </div>
-        <div class="full">
-          <label for="f_command">命令</label>
-          <textarea id="f_command" placeholder="在每个目标节点上执行的 shell 命令" required></textarea>
-        </div>
-        <div class="full">
-          <label>目标节点 <span class="hint" style="display:inline">已选 <b id="nodeCount">0</b> 个</span></label>
-          <div class="node-picker">
-            <div class="node-chips" id="nodeChips"><span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span></div>
-            <div class="node-search">
-              <input type="text" id="nodeFilter" placeholder="搜索节点…">
+
+      <div class="section">
+        <h3>基本信息</h3>
+        <div class="grid">
+          <div>
+            <label for="f_name">任务名称</label>
+            <input type="text" id="f_name" placeholder="例如: 每日磁盘清理" required>
+          </div>
+          <div>
+            <label for="f_cron">执行周期</label>
+            <input type="text" id="f_cron" class="mono" placeholder="0 3 * * *" required>
+            <div class="cron-presets" id="cronPresets">
+              <button type="button" data-cron="@every 1m">每分钟</button>
+              <button type="button" data-cron="*/5 * * * *">每 5 分钟</button>
+              <button type="button" data-cron="0 * * * *">每小时</button>
+              <button type="button" data-cron="0 3 * * *">每天 3 点</button>
+              <button type="button" data-cron="0 4 * * 0">每周日 4 点</button>
             </div>
-            <div class="node-list" id="nodeList"></div>
+          </div>
+          <div class="full">
+            <label for="f_command">命令</label>
+            <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令" required></textarea>
           </div>
         </div>
-        <div>
-          <label for="f_timeout">等待结果超时（秒）</label>
-          <input type="number" id="f_timeout" value="300" min="1" max="3600">
-        </div>
-        <div class="checks">
-          <label><input type="checkbox" id="f_notify" checked> 失败时通知</label>
-          <label><input type="checkbox" id="f_enabled" checked> 启用</label>
+      </div>
+
+      <div class="section">
+        <h3>目标与执行选项</h3>
+        <div class="grid">
+          <div class="full">
+            <label>目标节点 <span class="hint" style="display:inline">已选 <b id="nodeCount">0</b> 个</span></label>
+            <div class="node-picker">
+              <div class="node-chips" id="nodeChips"><span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span></div>
+              <div class="node-search">
+                <input type="text" id="nodeFilter" placeholder="搜索节点…">
+              </div>
+              <div class="node-list" id="nodeList"></div>
+            </div>
+          </div>
+          <div>
+            <label for="f_timeout">等待结果超时（秒）</label>
+            <input type="number" id="f_timeout" value="300" min="1" max="3600">
+          </div>
+          <div class="checks">
+            <label><input type="checkbox" id="f_notify" checked> 失败时通知</label>
+            <label><input type="checkbox" id="f_enabled" checked> 启用</label>
+          </div>
         </div>
       </div>
     </div>
@@ -298,7 +349,7 @@ function esc(s) {
 
 function nodeLabel(id) {
   const n = NODES.find((x) => x.uuid === id);
-  return n && n.name ? n.name : null; // null = 未知/自定义节点
+  return n && n.name ? n.name : null;
 }
 
 function timeAgo(iso) {
@@ -324,16 +375,20 @@ function taskRow(t) {
   const status = t.enabled
     ? '<span class="badge on">启用</span>'
     : '<span class="badge off">停用</span>';
+  // 语义化操作按钮：执行=主色，停用/启用=状态色，编辑/删除=幽灵
+  const toggleBtn = t.enabled
+    ? `<button data-act="toggle" class="btn-pause" title="停止定时触发">⏸ 停用</button>`
+    : `<button data-act="toggle" class="btn-resume" title="恢复定时触发">▶ 启用</button>`;
   return `<tr data-id="${esc(t.id)}">
     <td><div class="t-name">${esc(t.name)}</div><div class="t-cron">${esc(t.cron)}</div></td>
     <td><span class="t-cmd" title="${esc(t.command)}">${esc(t.command)}</span></td>
     <td>${nodePills(t.nodes)}</td>
     <td>${status}</td>
     <td><div class="row-actions">
-      <button data-act="toggle" class="secondary">${t.enabled ? "停用" : "启用"}</button>
-      <button data-act="run" class="secondary">执行</button>
+      <button data-act="run" class="btn-run" title="立即执行一次">▶ 执行</button>
+      ${toggleBtn}
       <button data-act="edit" class="ghost">编辑</button>
-      <button data-act="del" class="ghost" style="color:var(--danger)">删除</button>
+      <button data-act="del" class="ghost danger">删除</button>
     </div></td>
   </tr>`;
 }
@@ -435,6 +490,22 @@ $("nodeFilter").addEventListener("keydown", (e) => {
   }
 });
 
+// ---------- cron 预设 ----------
+
+function syncPresetHighlight() {
+  const cur = $("f_cron").value.trim();
+  document.querySelectorAll("#cronPresets button").forEach(b => {
+    b.classList.toggle("active", b.dataset.cron === cur);
+  });
+}
+$("cronPresets").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-cron]");
+  if (!b) return;
+  $("f_cron").value = b.dataset.cron;
+  syncPresetHighlight();
+});
+$("f_cron").addEventListener("input", syncPresetHighlight);
+
 // ---------- 弹框 ----------
 
 function openForm(task) {
@@ -449,6 +520,7 @@ function openForm(task) {
   selectedNodes = new Set(task?.nodes ?? []);
   $("nodeFilter").value = "";
   renderNodePicker();
+  syncPresetHighlight();
   dialog.showModal();
   $("f_name").focus();
 }
@@ -492,7 +564,7 @@ async function onTaskAction(act, id) {
         const r0 = await rpc("crontask.list");
         const t0 = r0.tasks.find((x) => x.id === id);
         await rpc("crontask.setEnabled", { id, enabled: !t0?.enabled });
-        toast("已更新");
+        toast(t0?.enabled ? "已停用" : "已启用");
         break;
       }
       case "run": {
@@ -584,8 +656,6 @@ $("btnRefresh").addEventListener("click", () => { refreshTasks(); refreshHistory
 $("taskForm").addEventListener("submit", saveForm);
 dialog.addEventListener("cancel", (e) => { e.preventDefault(); closeForm(); });
 
-// 先加载任务与节点（refreshTasks 内会填充 NODES），再渲染历史，
-// 避免历史区因节点名未就绪而回退显示 uuid。
 (async () => {
   await refreshTasks();
   await refreshHistory();
