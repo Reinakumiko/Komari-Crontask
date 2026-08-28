@@ -72,20 +72,24 @@
   table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
   th { text-align: left; padding: 8px 10px; color: var(--faint); font-weight: 500;
        font-size: 12px; text-transform: uppercase; letter-spacing: .4px;
-       border-bottom: 1px solid var(--border); }
+       border-bottom: 1px solid var(--border); white-space: nowrap; }
   td { padding: 12px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
   tr:last-child td { border-bottom: 0; }
   tr:hover td { background: #f8fafc; }
-  .t-name { font-weight: 600; }
+  .t-name { font-weight: 600; word-break: break-all; }
   .t-cron { color: var(--muted); font-size: 12px; font-family: var(--mono); margin-top: 1px; }
+  /* 命令列：自适应换行，最多两行，超出行数截断（悬停有 title 全文） */
   .t-cmd { font-family: var(--mono); font-size: 12px; background: #f8fafc; border: 1px solid #eef2f7;
-           padding: 3px 8px; border-radius: 6px; display: inline-block; max-width: 340px;
-           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+           padding: 3px 8px; border-radius: 6px; display: -webkit-box; -webkit-box-orient: vertical;
+           -webkit-line-clamp: 2; overflow: hidden; word-break: break-all;
+           line-height: 1.5; max-width: 420px; }
   .node-pill { display: inline-block; background: var(--primary-soft); color: #075985;
-               border-radius: 6px; padding: 1px 8px; font-size: 12px; margin: 1px 3px 1px 0; }
-  .node-pill.custom { background: var(--warn-soft); color: #92400e; }
-  .row-actions { display: flex; gap: 4px; }
-  .row-actions button { padding: 4px 10px; font-size: 12px; }
+               border-radius: 6px; padding: 1px 8px; font-size: 12px; margin: 1px 3px 1px 0;
+               max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+               vertical-align: middle; }
+  .node-pill.custom { background: var(--warn-soft); color: #92400e; font-family: var(--mono); font-size: 11px; }
+  .row-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+  .row-actions button { padding: 4px 10px; font-size: 12px; white-space: nowrap; }
 
   /* ---------- 历史记录 ---------- */
   .h-item { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px;
@@ -93,10 +97,12 @@
   .h-item:hover { border-color: #cbd5e1; }
   .h-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
   .h-name { font-weight: 650; font-size: 13.5px; }
-  .h-time { color: var(--faint); font-size: 12px; margin-left: auto; }
+  .h-time { color: var(--faint); font-size: 12px; margin-left: auto; text-align: right; }
   .h-cmd { font-family: var(--mono); font-size: 12px; color: var(--muted);
            background: #f8fafc; padding: 6px 14px; border-top: 1px solid #f1f5f9;
-           border-bottom: 1px solid #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+           border-bottom: 1px solid #f1f5f9; word-break: break-all;
+           display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+           overflow: hidden; line-height: 1.5; }
   .h-cmd::before { content: "$ "; color: var(--faint); }
   .h-node { padding: 10px 14px; }
   .h-node + .h-node { border-top: 1px dashed #eef2f7; }
@@ -147,7 +153,9 @@
   .node-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; min-height: 42px; }
   .node-chips .placeholder { color: var(--faint); font-size: 12px; align-self: center; padding: 0 4px; }
   .chip { display: inline-flex; align-items: center; gap: 5px; background: var(--primary-soft);
-          color: #075985; border-radius: 999px; padding: 2.5px 6px 2.5px 11px; font-size: 12px; font-weight: 500; }
+          color: #075985; border-radius: 999px; padding: 2.5px 6px 2.5px 11px; font-size: 12px; font-weight: 500;
+          max-width: 200px; }
+  .chip .chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .chip button { background: none; color: #075985; padding: 0 4px; font-size: 13px; line-height: 1; }
   .chip button:hover { color: var(--danger); }
   .chip.custom { background: var(--warn-soft); color: #92400e; font-family: var(--mono); font-size: 11px; }
@@ -183,7 +191,7 @@
     <div class="card-title">任务 <span class="sub" id="taskCount"></span></div>
     <table>
       <thead>
-        <tr><th style="width:22%">任务</th><th>命令</th><th style="width:20%">目标节点</th><th style="width:9%">状态</th><th style="width:200px">操作</th></tr>
+        <tr><th>任务</th><th>命令</th><th>目标节点</th><th>状态</th><th>操作</th></tr>
       </thead>
       <tbody id="tasksBody"></tbody>
     </table>
@@ -391,7 +399,7 @@ function renderChips() {
   chips.innerHTML = [...selectedNodes].map((id) => {
     const label = nodeLabel(id);
     return label
-      ? `<span class="chip" title="${esc(id)}">${esc(label)}<button type="button" data-remove="${esc(id)}" aria-label="移除">✕</button></span>`
+      ? `<span class="chip" title="${esc(id)}"><span class="chip-label">${esc(label)}</span><button type="button" data-remove="${esc(id)}" aria-label="移除">✕</button></span>`
       : `<span class="chip custom" title="节点已不在线">${esc(id)}<button type="button" data-remove="${esc(id)}" aria-label="移除">✕</button></span>`;
   }).join("");
 }
