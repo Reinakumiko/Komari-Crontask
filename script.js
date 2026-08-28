@@ -536,7 +536,9 @@
   // src/plugin.ts
   var TASKS_FILE = `${__storageDir__}/tasks.json`;
   var HISTORY_FILE = `${__storageDir__}/history.json`;
+  var AUDIT_FILE = `${__storageDir__}/audit.json`;
   var HISTORY_LIMIT = 200;
+  var AUDIT_LIMIT = 500;
   var POLL_INTERVAL_MS = 2e3;
   var inFlight = /* @__PURE__ */ new Set();
   function readJsonFileSync(path, fallback) {
@@ -557,6 +559,21 @@
   }
   function loadHistorySync() {
     return readJsonFileSync(HISTORY_FILE, []);
+  }
+  function loadAuditSync() {
+    return readJsonFileSync(AUDIT_FILE, []);
+  }
+  function appendAuditSync(entry) {
+    try {
+      const items = loadAuditSync();
+      items.push(entry);
+      if (items.length > AUDIT_LIMIT) {
+        items.splice(0, items.length - AUDIT_LIMIT);
+      }
+      writeJsonFileSync(AUDIT_FILE, items);
+    } catch (err) {
+      console.log(`[crontask] audit write failed: ${String(err)}`);
+    }
   }
   function appendHistorySync(entry) {
     try {
@@ -718,10 +735,12 @@ Exec failed: ${String(err)}`,
     return { tasks: loadTasksSync(), nodes: [] };
   }
   function rpcSave(input) {
+    const operator = String(input?._operator ?? "admin");
     const task = taskFromInput(input ?? {});
     const error = validateTask(task);
     if (error) return { ok: false, error };
     const tasks = loadTasksSync();
+    let action = "create";
     if (task.id === "") {
       task.id = newId();
       task.createdAt = (/* @__PURE__ */ new Date()).toISOString();
@@ -729,22 +748,43 @@ Exec failed: ${String(err)}`,
     } else {
       const idx = tasks.findIndex((t) => t.id === task.id);
       if (idx === -1) return { ok: false, error: "Task not found" };
+      action = "update";
       tasks[idx] = { ...task, createdAt: tasks[idx].createdAt };
     }
     persistTasksSync(tasks);
+    appendAuditSync({
+      ts: (/* @__PURE__ */ new Date()).toISOString(),
+      action,
+      operator,
+      taskId: task.id,
+      taskName: task.name,
+      detail: `${action === "create" ? "\u521B\u5EFA" : "\u66F4\u65B0"}\u4EFB\u52A1 "${task.name}" @ ${task.cron}\uFF0C\u8282\u70B9 ${task.nodes.length} \u4E2A`
+    });
     return { ok: true, task };
   }
   function rpcDelete(params) {
-    const id = String(params?.id ?? "");
+    const p = params ?? {};
+    const operator = String(p._operator ?? "admin");
+    const id = String(p.id ?? "");
     if (!id) return { ok: false, error: "Task id is required" };
     const tasks = loadTasksSync();
+    const target = tasks.find((t) => t.id === id);
+    if (!target) return { ok: false, error: "Task not found" };
     const next = tasks.filter((t) => t.id !== id);
-    if (next.length === tasks.length) return { ok: false, error: "Task not found" };
     persistTasksSync(next);
+    appendAuditSync({
+      ts: (/* @__PURE__ */ new Date()).toISOString(),
+      action: "delete",
+      operator,
+      taskId: id,
+      taskName: target.name,
+      detail: `\u5220\u9664\u4EFB\u52A1 "${target.name}"`
+    });
     return { ok: true };
   }
   function rpcSetEnabled(params) {
     const p = params ?? {};
+    const operator = String(p._operator ?? "admin");
     const id = String(p.id ?? "");
     const enabled = asBoolean(p.enabled, true);
     const tasks = loadTasksSync();
@@ -752,22 +792,45 @@ Exec failed: ${String(err)}`,
     if (!task) return { ok: false, error: "Task not found" };
     task.enabled = enabled;
     persistTasksSync(tasks);
+    appendAuditSync({
+      ts: (/* @__PURE__ */ new Date()).toISOString(),
+      action: enabled ? "enable" : "disable",
+      operator,
+      taskId: id,
+      taskName: task.name,
+      detail: `${enabled ? "\u542F\u7528" : "\u505C\u7528"}\u4EFB\u52A1 "${task.name}"`
+    });
     return { ok: true };
   }
   function rpcRun(params) {
-    const id = String(params?.id ?? "");
+    const p = params ?? {};
+    const operator = String(p._operator ?? "admin");
+    const id = String(p.id ?? "");
     const task = loadTasksSync().find((t) => t.id === id);
     if (!task) return { ok: false, error: "Task not found" };
     if (task.command === "" || task.nodes.length === 0) {
       return { ok: false, error: "Task has no command or nodes" };
     }
     void dispatchTask(task);
+    appendAuditSync({
+      ts: (/* @__PURE__ */ new Date()).toISOString(),
+      action: "run",
+      operator,
+      taskId: id,
+      taskName: task.name,
+      detail: `\u624B\u52A8\u89E6\u53D1\u4EFB\u52A1 "${task.name}"`
+    });
     return { ok: true };
   }
   function rpcHistory(params) {
     const limit = Math.max(1, Math.min(200, Number(params?.limit ?? 50) || 50));
     const items = loadHistorySync();
     return { history: items.slice(-limit).reverse() };
+  }
+  function rpcAudit(params) {
+    const limit = Math.max(1, Math.min(500, Number(params?.limit ?? 100) || 100));
+    const items = loadAuditSync();
+    return { audit: items.slice(-limit).reverse() };
   }
   (0, import_plugin_sdk.definePlugin)({
     async load() {
@@ -777,7 +840,8 @@ Exec failed: ${String(err)}`,
         ["crontask.delete", (p) => rpcDelete(p)],
         ["crontask.setEnabled", (p) => rpcSetEnabled(p)],
         ["crontask.run", (p) => rpcRun(p)],
-        ["crontask.history", (p) => rpcHistory(p)]
+        ["crontask.history", (p) => rpcHistory(p)],
+        ["crontask.audit", (p) => rpcAudit(p)]
       ];
       for (const [name, handler] of rpcs) {
         try {
