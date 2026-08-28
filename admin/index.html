@@ -19,26 +19,23 @@
   body { margin: 0; background: var(--bg); color: var(--text);
          font: 14px/1.65 -apple-system, system-ui, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; }
 
-  /* ---------- 顶栏 ---------- */
   header { position: sticky; top: 0; z-index: 10;
            background: rgba(255,255,255,.92); backdrop-filter: blur(8px);
            border-bottom: 1px solid var(--border);
            padding: 14px 28px; display: flex; align-items: center; gap: 12px; }
   header .brand { display: flex; align-items: baseline; gap: 10px; }
   header h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: .2px; }
-  header .ver { color: var(--faint); font-size: 12px; font-family: var(--mono); }
+  header .ver { color: var(--faint); font-size: 12px; font-family: var(--mono); cursor: pointer; }
+  header .ver:hover { color: var(--primary); }
   header .actions { margin-left: auto; display: flex; gap: 8px; }
-
   main { max-width: 1000px; margin: 24px auto 40px; padding: 0 20px; }
 
-  /* ---------- 按钮 ---------- */
   button { background: var(--primary); color: #fff; border: 0; border-radius: 8px;
            padding: 7px 14px; font-size: 13px; cursor: pointer; transition: filter .12s, background .12s; }
   button:hover { filter: brightness(1.08); }
   button:disabled { opacity: .45; cursor: not-allowed; }
   button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
   button.secondary:hover { background: #f8fafc; filter: none; }
-  /* 行内操作按钮语义化配色 */
   .btn-run { background: var(--primary); color: #fff; font-weight: 600; }
   .btn-run:hover { background: var(--primary-deep); filter: none; }
   .btn-pause { background: var(--warn-soft); color: var(--warn); font-weight: 600; border: 1px solid #fde68a; }
@@ -51,10 +48,10 @@
   button.ghost.danger:hover { background: var(--danger-soft); color: var(--danger); }
 
   .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
-          padding: 18px 20px; margin-bottom: 18px;
-          box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+          padding: 18px 20px; margin-bottom: 18px; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
   .card-title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; font-size: 14px; font-weight: 650; }
   .card-title .sub { color: var(--faint); font-size: 12px; font-weight: 400; }
+  .card-title .right { margin-left: auto; }
 
   .badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px;
            border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
@@ -99,18 +96,21 @@
   .row-actions .btn-run, .row-actions .btn-pause, .row-actions .btn-resume { padding: 5px 12px; font-size: 12.5px; }
   .row-actions button.ghost { font-size: 12.5px; }
 
-  /* ---------- 历史记录 ---------- */
-  .h-item { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px;
+  /* ---------- 历史记录（可展开） ---------- */
+  .h-item { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px;
             overflow: hidden; background: #fff; }
   .h-item:hover { border-color: #cbd5e1; }
-  .h-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+  .h-item.open { border-color: var(--primary); }
+  .h-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap;
+            cursor: pointer; user-select: none; }
   .h-name { font-weight: 650; font-size: 13.5px; }
   .h-time { color: var(--faint); font-size: 12px; margin-left: auto; text-align: right; }
+  .h-toggle { font-size: 12px; color: var(--faint); transition: transform .15s; }
+  .h-item.open .h-toggle { transform: rotate(180deg); color: var(--primary); }
+  .h-body { border-top: 1px solid #f1f5f9; }
   .h-cmd { font-family: var(--mono); font-size: 12px; color: var(--muted);
-           background: #f8fafc; padding: 6px 14px; border-top: 1px solid #f1f5f9;
-           border-bottom: 1px solid #f1f5f9; word-break: break-all;
-           display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
-           overflow: hidden; line-height: 1.5; }
+           background: #f8fafc; padding: 6px 14px; border-bottom: 1px solid #f1f5f9; word-break: break-all;
+           display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; line-height: 1.5; }
   .h-cmd::before { content: "$ "; color: var(--faint); }
   .h-node { padding: 10px 14px; }
   .h-node + .h-node { border-top: 1px dashed #eef2f7; }
@@ -127,11 +127,10 @@
 
   /* ---------- 弹框 ---------- */
   dialog { border: 0; border-radius: 14px; padding: 0;
-           width: min(640px, calc(100vw - 32px));
+           width: min(680px, calc(100vw - 32px));
            box-shadow: 0 24px 64px rgba(15,23,42,.28); }
   dialog::backdrop { background: rgba(15, 23, 42, .45); backdrop-filter: blur(2px); }
-  .dlg-head { display: flex; align-items: center; padding: 16px 22px;
-              border-bottom: 1px solid var(--border); }
+  .dlg-head { display: flex; align-items: center; padding: 16px 22px; border-bottom: 1px solid var(--border); }
   .dlg-head h2 { font-size: 15px; margin: 0; font-weight: 650; }
   .dlg-head .close { margin-left: auto; background: none; color: var(--faint); font-size: 17px; padding: 2px 8px; }
   .dlg-head .close:hover { color: var(--text); background: #f1f5f9; filter: none; }
@@ -141,8 +140,7 @@
               border-radius: 0 0 14px 14px; }
   .dlg-foot #btnSave { padding: 8px 22px; font-weight: 600; }
 
-  /* 弹框分区（单列布局：每个输入独占一行） */
-  .section { margin-bottom: 20px; }
+  .section { margin-bottom: 22px; }
   .section:last-child { margin-bottom: 0; }
   .section > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px;
                   font-size: 12px; font-weight: 600; color: var(--muted);
@@ -151,55 +149,72 @@
   .field { margin-bottom: 14px; }
   .field:last-child { margin-bottom: 0; }
 
-  /* 开关行 */
-  .opt-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px;
-             border: 1px solid var(--border); border-radius: 10px; margin-bottom: 12px;
-             cursor: pointer; transition: border-color .12s, background .12s; }
-  .opt-row:hover { border-color: #cbd5e1; background: #f8fafc; }
-  .opt-row .opt-text { flex: 1; min-width: 0; }
-  .opt-title { font-size: 13.5px; font-weight: 600; color: var(--text); }
-  .opt-desc { font-size: 12px; color: var(--faint); margin-top: 1px; }
-  .switch { position: relative; width: 42px; height: 24px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
-  .switch .slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 999px;
-                    transition: background .15s; }
-  .switch .slider::before { content: ""; position: absolute; width: 18px; height: 18px;
-                            left: 3px; top: 3px; background: #fff; border-radius: 50%;
-                            box-shadow: 0 1px 3px rgba(15,23,42,.25); transition: transform .15s; }
-  .switch input:checked + .slider { background: var(--primary); }
-  .switch input:checked + .slider::before { transform: translateX(18px); }
-  .switch input:focus-visible + .slider { box-shadow: 0 0 0 3px rgba(2,132,199,.2); }
-
   label { display: block; font-size: 12.5px; margin-bottom: 5px; font-weight: 600; color: #334155; }
   input[type=text], input[type=number] {
     width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px;
     font-size: 13px; font-family: inherit; background: #fff; transition: border-color .12s, box-shadow .12s; }
-  input:focus { outline: none; border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
 
-  /* 命令编辑器：终端风格（与执行输出的深色块呼应） */
   textarea.term { width: 100%; resize: vertical; min-height: 96px;
     background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 8px;
     font-family: var(--mono); font-size: 12.5px; line-height: 1.6; padding: 10px 12px;
     caret-color: #38bdf8; transition: border-color .12s, box-shadow .12s; }
   textarea.term::placeholder { color: #475569; }
-  textarea.term:focus { outline: none; border-color: #38bdf8;
-    box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
+  textarea.term:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
 
-  /* cron 预设 */
-  .cron-presets { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 7px; }
-  .cron-presets button { font-size: 11.5px; padding: 2.5px 9px; border-radius: 999px;
+  /* ---------- cron 可视化选择器 ---------- */
+  .cron-wizard { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
+  .cron-wizard:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  .cron-freq { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
+  .cron-freq button { font-size: 12.5px; padding: 5px 14px; border-radius: 999px;
     background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
-  .cron-presets button:hover { background: var(--primary-soft); color: var(--primary-deep);
-    border-color: #bae6fd; filter: none; }
-  .cron-presets button.active { background: var(--primary); border-color: var(--primary);
-    color: #fff; font-weight: 600; }
-  .hint { color: var(--faint); font-size: 11.5px; margin-top: 4px; }
+  .cron-freq button:hover { background: var(--primary-soft); color: var(--primary-deep); border-color: #bae6fd; filter: none; }
+  .cron-freq button.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  .cron-config { padding: 12px 14px; min-height: 84px; }
+  .cron-config .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .cron-config .pick-time { display: flex; align-items: center; gap: 6px; }
+  .cron-config .pick-time input[type=time] { font-family: var(--mono); font-size: 14px;
+    padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; width: 130px; }
+  .cron-config .pick-time input[type=time]:focus { outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  .cron-config .pick-time .lbl { color: var(--faint); font-size: 12px; }
+  .cron-weekdays { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .cron-weekdays button { width: 34px; height: 34px; border-radius: 8px; font-size: 12.5px;
+    background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); padding: 0; }
+  .cron-weekdays button.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  .cron-mday { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .cron-mday select { font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .cron-custom-input { width: 100%; font-family: var(--mono); font-size: 13px;
+    padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px; }
+  .cron-custom-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  .cron-preview { font-family: var(--mono); font-size: 13px; color: var(--primary-deep);
+    background: var(--primary-soft); border-top: 1px solid #bae6fd; padding: 7px 14px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .cron-preview .cap { color: var(--faint); font-size: 11px; }
+  .cron-preview .human { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  /* ---------- 开关行（title/desc 分行） ---------- */
+  .opt-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+             border: 1px solid var(--border); border-radius: 10px; margin-bottom: 10px;
+             cursor: pointer; transition: border-color .12s, background .12s; }
+  .opt-row:hover { border-color: #cbd5e1; background: #f8fafc; }
+  .opt-row .opt-text { flex: 1; min-width: 0; }
+  .opt-title { font-size: 14px; font-weight: 650; color: var(--text); display: block; }
+  .opt-desc { font-size: 12px; color: var(--faint); margin-top: 2px; display: block; line-height: 1.5; }
+  .switch { position: relative; width: 44px; height: 25px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .switch .slider { position: absolute; inset: 0; background: #cbd5e1; border-radius: 999px;
+                    transition: background .15s; }
+  .switch .slider::before { content: ""; position: absolute; width: 19px; height: 19px;
+                            left: 3px; top: 3px; background: #fff; border-radius: 50%;
+                            box-shadow: 0 1px 3px rgba(15,23,42,.25); transition: transform .15s; }
+  .switch input:checked + .slider { background: var(--primary); }
+  .switch input:checked + .slider::before { transform: translateX(19px); }
+  .switch input:focus-visible + .slider { box-shadow: 0 0 0 3px rgba(2,132,199,.2); }
 
   /* ---------- 节点选择器 ---------- */
   .node-picker { border: 1px solid var(--border); border-radius: 8px; background: #fff; overflow: hidden; }
-  .node-picker:focus-within { border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  .node-picker:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
   .node-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; min-height: 42px; }
   .node-chips .placeholder { color: var(--faint); font-size: 12px; align-self: center; padding: 0 4px; }
   .chip { display: inline-flex; align-items: center; gap: 5px; background: var(--primary-soft);
@@ -209,24 +224,30 @@
   .chip button { background: none; color: #075985; padding: 0 4px; font-size: 13px; line-height: 1; }
   .chip button:hover { color: var(--danger); }
   .chip.custom { background: var(--warn-soft); color: #92400e; font-family: var(--mono); font-size: 11px; }
-  .node-search { border-top: 1px solid #f1f5f9; }
-  .node-search input { border: 0; padding: 8px 10px; font-size: 13px; background: transparent; }
-  .node-search input:focus { outline: none; box-shadow: none; }
-  .node-list { max-height: 170px; overflow-y: auto; border-top: 1px solid #f1f5f9; }
+  .node-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-top: 1px solid #f1f5f9; }
+  .node-toolbar .search { flex: 1; display: flex; align-items: center; border: 1px solid var(--border);
+                          border-radius: 8px; padding: 0 10px; background: #f8fafc; }
+  .node-toolbar .search:focus-within { border-color: var(--primary); background: #fff; }
+  .node-toolbar .search .icon { color: var(--faint); font-size: 13px; }
+  .node-toolbar .search input { border: 0; background: transparent; padding: 7px 8px; font-size: 13px; width: 100%; }
+  .node-toolbar .search input:focus { outline: none; box-shadow: none; }
+  .node-toolbar .count { color: var(--faint); font-size: 12px; white-space: nowrap; }
+  .node-list { max-height: 180px; overflow-y: auto; }
   .node-item { display: flex; align-items: center; gap: 9px; padding: 7px 11px; cursor: pointer; }
   .node-item:hover { background: #f8fafc; }
   .node-item input { accent-color: var(--primary); }
-  .node-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+  .node-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); flex: none; }
   .node-empty { padding: 12px; color: var(--faint); font-size: 12px; }
   .node-add-custom { padding: 8px 11px; font-size: 12px; color: var(--muted); }
   .node-add-custom button { font-size: 12px; padding: 3px 9px; }
+
 </style>
 </head>
 <body>
 <header>
   <div class="brand">
     <h1>定时任务</h1>
-    <span class="ver">cron-task</span>
+    <span class="ver">cron-task v0.3.5</span>
   </div>
   <div class="actions">
     <button class="secondary" id="btnRefresh">刷新</button>
@@ -249,8 +270,20 @@
   </div>
 
   <div class="card">
-    <div class="card-title">执行历史 <span class="sub">最新在前 · 保留 200 条</span></div>
+    <div class="card-title">执行历史 <span class="sub" id="historyCount"></span>
+      <span class="right">
+        <button class="ghost" id="btnExpandAll">全部展开</button>
+        <button class="ghost" id="btnCollapseAll">全部收起</button>
+      </span>
+    </div>
     <div id="historyList"><div class="empty">加载中…</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">操作日志 <span class="sub" id="auditCount"></span>
+      <span class="right"><button class="ghost" id="btnRefreshAudit">刷新</button></span>
+    </div>
+    <div id="auditList"><div class="empty">加载中…</div></div>
   </div>
 </main>
 
@@ -263,6 +296,7 @@
     </div>
     <div class="dlg-body">
       <input type="hidden" id="f_id">
+      <input type="hidden" id="f_cron">
 
       <div class="section">
         <h3>基本信息</h3>
@@ -271,34 +305,75 @@
           <input type="text" id="f_name" placeholder="例如: 每日磁盘清理" required>
         </div>
         <div class="field">
-          <label for="f_cron">执行周期</label>
-          <input type="text" id="f_cron" class="mono" placeholder="0 3 * * *" required>
-          <div class="cron-presets" id="cronPresets">
-            <button type="button" data-cron="@every 1m">每分钟</button>
-            <button type="button" data-cron="*/5 * * * *">每 5 分钟</button>
-            <button type="button" data-cron="0 * * * *">每小时</button>
-            <button type="button" data-cron="0 3 * * *">每天 3 点</button>
-            <button type="button" data-cron="0 4 * * 0">每周日 4 点</button>
+          <label>执行周期</label>
+          <div class="cron-wizard">
+            <div class="cron-freq">
+              <button type="button" data-freq="daily" class="active">每天</button>
+              <button type="button" data-freq="weekly">每周</button>
+              <button type="button" data-freq="monthly">每月</button>
+              <button type="button" data-freq="interval">固定间隔</button>
+              <button type="button" data-freq="custom">自定义</button>
+            </div>
+            <div class="cron-config">
+              <div class="row" data-cfg="daily">
+                <span class="pick-time"><span class="lbl">时间</span><input type="time" id="cronTime" value="03:00"></span>
+                <span class="muted">每天在选定时间执行</span>
+              </div>
+              <div class="row" data-cfg="weekly" style="display:none">
+                <span class="pick-time"><span class="lbl">时间</span><input type="time" id="cronTimeW" value="03:00"></span>
+                <div class="cron-weekdays" id="cronWeekdays">
+                  <button type="button" data-dow="1" class="on">一</button>
+                  <button type="button" data-dow="2">二</button>
+                  <button type="button" data-dow="3">三</button>
+                  <button type="button" data-dow="4">四</button>
+                  <button type="button" data-dow="5">五</button>
+                  <button type="button" data-dow="6">六</button>
+                  <button type="button" data-dow="0">日</button>
+                </div>
+              </div>
+              <div class="row" data-cfg="monthly" style="display:none">
+                <span class="pick-time"><span class="lbl">时间</span><input type="time" id="cronTimeM" value="03:00"></span>
+                <span class="cron-mday"><span class="lbl">每月</span><select id="cronMday"></select><span class="lbl">号</span></span>
+              </div>
+              <div class="row" data-cfg="interval" style="display:none">
+                <span class="pick-time"><span class="lbl">每</span><input type="number" id="cronEveryN" value="5" min="1" style="width:70px">
+                <select id="cronEveryUnit">
+                  <option value="m">分钟</option>
+                  <option value="h">小时</option>
+                  <option value="d">天</option>
+                </select></span>
+              </div>
+              <div class="row" data-cfg="custom" style="display:none">
+                <input type="text" id="cronCustom" class="cron-custom-input" placeholder="0 3 * * *">
+              </div>
+            </div>
+            <div class="cron-preview"><span class="cap">表达式</span><span id="cronPreviewText">0 3 * * *</span>
+              <span class="human" id="cronHuman">每天 03:00</span></div>
           </div>
-        </div>
-        <div class="field">
-          <label for="f_command">命令</label>
-          <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令" required></textarea>
         </div>
       </div>
 
       <div class="section">
-        <h3>目标与执行选项</h3>
+        <h3>命令与目标</h3>
+        <div class="field">
+          <label for="f_command">命令</label>
+          <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令" required></textarea>
+        </div>
         <div class="field">
           <label>目标节点 <span class="hint" style="display:inline">已选 <b id="nodeCount">0</b> 个</span></label>
           <div class="node-picker">
-            <div class="node-chips" id="nodeChips"><span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span></div>
-            <div class="node-search">
-              <input type="text" id="nodeFilter" placeholder="搜索节点…">
+            <div class="node-chips" id="nodeChips"><span class="placeholder">在下方搜索并勾选节点</span></div>
+            <div class="node-toolbar">
+              <div class="search"><span class="icon">🔍</span><input type="text" id="nodeFilter" placeholder="搜索节点名称…"></div>
+              <span class="count" id="nodeMeta"></span>
             </div>
             <div class="node-list" id="nodeList"></div>
           </div>
         </div>
+      </div>
+
+      <div class="section">
+        <h3>执行设置</h3>
         <div class="field">
           <label for="f_timeout">等待结果超时（秒）</label>
           <input type="number" id="f_timeout" value="300" min="1" max="3600">
@@ -329,33 +404,34 @@
   </form>
 </dialog>
 
+<!-- 更新日志弹框 -->
+
+
 <div class="toast" id="toast"></div>
 
 <script>
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-let NODES = [];                 // [{uuid, name}]
+let NODES = [];
 let selectedNodes = new Set();
 const dialog = $("taskDialog");
 
+// ---------- 通用 ----------
 function toast(msg) {
   const t = $("toast");
   t.textContent = msg;
   t.classList.add("show");
   setTimeout(() => t.classList.remove("show"), 2600);
 }
-
 function showError(msg) {
   const b = $("errorBanner");
   b.textContent = msg;
   b.style.display = msg ? "block" : "none";
 }
-
 async function rpc(method, params) {
   const res = await fetch("/api/rpc2", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    method: "POST", headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: params ?? {} }),
   });
@@ -364,18 +440,15 @@ async function rpc(method, params) {
   if (body.error) throw new Error(body.error.message || body.error.code);
   return body.result;
 }
-
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
   }[c]));
 }
-
 function nodeLabel(id) {
   const n = NODES.find((x) => x.uuid === id);
   return n && n.name ? n.name : null;
 }
-
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60e3) return "刚刚";
@@ -385,7 +458,6 @@ function timeAgo(iso) {
 }
 
 // ---------- 任务列表 ----------
-
 function nodePills(ids) {
   return ids.map((id) => {
     const label = nodeLabel(id);
@@ -394,12 +466,8 @@ function nodePills(ids) {
       : `<span class="node-pill custom" title="节点已不在线，保留 ID">${esc(id.slice(0, 8))}…</span>`;
   }).join("");
 }
-
 function taskRow(t) {
-  const status = t.enabled
-    ? '<span class="badge on">启用</span>'
-    : '<span class="badge off">停用</span>';
-  // 语义化操作按钮：执行=主色，停用/启用=状态色，编辑/删除=幽灵
+  const status = t.enabled ? '<span class="badge on">启用</span>' : '<span class="badge off">停用</span>';
   const toggleBtn = t.enabled
     ? `<button data-act="toggle" class="btn-pause" title="停止定时触发">⏸ 停用</button>`
     : `<button data-act="toggle" class="btn-resume" title="恢复定时触发">▶ 启用</button>`;
@@ -416,38 +484,123 @@ function taskRow(t) {
     </div></td>
   </tr>`;
 }
-
 async function refreshTasks() {
   try {
     const r = await rpc("crontask.list");
     try {
       const nodesResp = await rpc("common:getNodes");
       NODES = Object.entries(nodesResp || {}).map(([uuid, info]) => ({ uuid, name: info.name || uuid }));
-    } catch {
-      NODES = [];
-    }
+    } catch { NODES = []; }
     renderNodeList();
     const tbody = $("tasksBody");
     $("taskCount").textContent = r.tasks.length ? `共 ${r.tasks.length} 个` : "";
-    if (!r.tasks.length) {
-      tbody.innerHTML = "";
-      $("tasksEmpty").style.display = "block";
-    } else {
-      $("tasksEmpty").style.display = "none";
-      tbody.innerHTML = r.tasks.map(taskRow).join("");
-    }
-  } catch (e) {
-    showError("加载任务失败: " + e.message);
-  }
+    if (!r.tasks.length) { tbody.innerHTML = ""; $("tasksEmpty").style.display = "block"; }
+    else { $("tasksEmpty").style.display = "none"; tbody.innerHTML = r.tasks.map(taskRow).join(""); }
+  } catch (e) { showError("加载任务失败: " + e.message); }
 }
 
-// ---------- 节点选择器 ----------
+// ---------- cron 可视化选择器 ----------
+const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
+function pad(n) { return String(n).padStart(2, "0"); }
+// time input 是 "时:分"，cron 是 "分 时"，转换时交换字段
+function timeToCron(v) { const p = String(v || "00:00").split(":"); return p[1] + " " + p[0]; }
+function fmtTime(expr) {
+  // cron "分 时" -> time input "时:分"
+  const p = expr.split(/\s+/);
+  if (p.length >= 2 && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1])) return pad(p[1]) + ":" + pad(p[0]);
+  return "00:00";
+}
+function currentFreq() {
+  return document.querySelector(".cron-freq button.active")?.dataset.freq || "daily";
+}
+function setFreq(freq) {
+  document.querySelectorAll(".cron-freq button").forEach(b => b.classList.toggle("active", b.dataset.freq === freq));
+  document.querySelectorAll(".cron-config .row").forEach(r => { r.style.display = r.dataset.cfg === freq ? "" : "none"; });
+}
+function freqToCron() {
+  const freq = currentFreq();
+  switch (freq) {
+    case "daily": return timeToCron($("cronTime").value) + " * * *";
+    case "weekly": {
+      const t = timeToCron($("cronTimeW").value);
+      const dows = [...document.querySelectorAll("#cronWeekdays button.on")].map(b => b.dataset.dow);
+      const w = dows.length ? dows.join(",") : "0";
+      return `${t} * * ${w}`;
+    }
+    case "monthly": return timeToCron($("cronTimeM").value) + " " + $("cronMday").value + " * *";
+    case "interval": return "@every " + Number($("cronEveryN").value || 5) + $("cronEveryUnit").value;
+    case "custom": return $("cronCustom").value.trim() || "0 3 * * *";
+  }
+  return "0 3 * * *";
+}
+function humanizeCron(expr) {
+  const t = String(expr).trim();
+  if (/^@every\s+/i.test(t)) return "每 " + t.replace(/^@every\s+/i, "");
+  const p = t.split(/\s+/);
+  if (p.length < 5) return t;
+  const tm = pad(p[0]) + ":" + pad(p[1]);
+  if (p[4] !== "*") {
+    const dows = String(p[4]).split(",").map(d => WEEKDAY_NAMES[Number(d)]).join("、");
+    return "每周" + dows + " " + tm;
+  }
+  if (p[2] !== "*") return "每月 " + p[2] + " 号 " + tm;
+  if (p[1] !== "*") return "每天 " + tm;
+  return t;
+}
+function updateCronPreview() {
+  const expr = freqToCron();
+  $("cronPreviewText").textContent = expr;
+  $("cronHuman").textContent = humanizeCron(expr);
+}
+function cronToFreq(expr) {
+  const t = String(expr || "").trim();
+  if (/^@every\s+/i.test(t)) {
+    const m = t.replace(/^@every\s+/i, "").match(/^(\d+)([mhd])$/i);
+    if (m) { $("cronEveryN").value = m[1]; $("cronEveryUnit").value = m[2].toLowerCase(); }
+    setFreq("interval");
+    return;
+  }
+  const p = t.split(/\s+/);
+  if (p.length >= 5) {
+    if (p[4] !== "*" && p[2] === "*") {
+      $("cronTimeW").value = fmtTime(t);
+      document.querySelectorAll("#cronWeekdays button").forEach(b => b.classList.toggle("on", String(p[4]).split(",").includes(b.dataset.dow)));
+      setFreq("weekly");
+    } else if (p[2] !== "*") {
+      $("cronTimeM").value = fmtTime(t);
+      $("cronMday").value = p[2];
+      setFreq("monthly");
+    } else {
+      $("cronTime").value = fmtTime(t);
+      setFreq("daily");
+    }
+  } else {
+    $("cronCustom").value = t;
+    setFreq("custom");
+  }
+}
+function buildCronExpr() { return freqToCron(); }
 
+// 初始化每月日期下拉
+for (let i = 1; i <= 31; i++) {
+  const o = document.createElement("option");
+  o.value = String(i); o.textContent = String(i);
+  $("cronMday").appendChild(o);
+}
+$("cronMday").value = "1";
+
+document.querySelectorAll(".cron-freq button").forEach(b => b.addEventListener("click", () => { setFreq(b.dataset.freq); updateCronPreview(); }));
+["cronTime", "cronTimeW", "cronTimeM", "cronEveryN", "cronEveryUnit", "cronCustom"].forEach(id => $(id).addEventListener("input", updateCronPreview));
+document.querySelectorAll("#cronWeekdays button").forEach(b => b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); }));
+$("cronMday").addEventListener("change", updateCronPreview);
+
+// ---------- 节点选择器 ----------
 function renderNodeList() {
   const filter = $("nodeFilter").value.trim().toLowerCase();
   const list = $("nodeList");
   const matches = NODES.filter((n) =>
     !filter || n.name.toLowerCase().includes(filter) || n.uuid.toLowerCase().includes(filter));
+  $("nodeMeta").textContent = `${matches.length} / ${NODES.length} 节点`;
   let html = matches.map((n) => `
     <label class="node-item" title="${esc(n.uuid)}">
       <input type="checkbox" data-uuid="${esc(n.uuid)}" ${selectedNodes.has(n.uuid) ? "checked" : ""}>
@@ -462,19 +615,13 @@ function renderNodeList() {
   list.innerHTML = html;
   const custom = $("btnAddCustom");
   if (custom) custom.addEventListener("click", () => {
-    selectedNodes.add(filter);
-    $("nodeFilter").value = "";
-    renderNodePicker();
+    selectedNodes.add(filter); $("nodeFilter").value = ""; renderNodePicker();
   });
 }
-
 function renderChips() {
   const chips = $("nodeChips");
   $("nodeCount").textContent = String(selectedNodes.size);
-  if (!selectedNodes.size) {
-    chips.innerHTML = '<span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span>';
-    return;
-  }
+  if (!selectedNodes.size) { chips.innerHTML = '<span class="placeholder">在下方搜索并勾选节点</span>'; return; }
   chips.innerHTML = [...selectedNodes].map((id) => {
     const label = nodeLabel(id);
     return label
@@ -482,61 +629,35 @@ function renderChips() {
       : `<span class="chip custom" title="节点已不在线">${esc(id)}<button type="button" data-remove="${esc(id)}" aria-label="移除">✕</button></span>`;
   }).join("");
 }
-
-function renderNodePicker() {
-  renderChips();
-  renderNodeList();
-}
-
+function renderNodePicker() { renderChips(); renderNodeList(); }
 $("nodeList").addEventListener("change", (e) => {
   const cb = e.target.closest("input[data-uuid]");
   if (!cb) return;
   cb.checked ? selectedNodes.add(cb.dataset.uuid) : selectedNodes.delete(cb.dataset.uuid);
   renderChips();
 });
-
 $("nodeChips").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-remove]");
   if (!btn) return;
-  selectedNodes.delete(btn.dataset.remove);
-  renderNodePicker();
+  selectedNodes.delete(btn.dataset.remove); renderNodePicker();
 });
-
 $("nodeFilter").addEventListener("input", renderNodeList);
 $("nodeFilter").addEventListener("keydown", (e) => {
   if (e.key !== "Enter") return;
   e.preventDefault();
   const v = e.target.value.trim();
   if (v && /^[0-9a-f-]{8,}$/i.test(v) && !NODES.some((n) => n.uuid === v)) {
-    selectedNodes.add(v);
-    e.target.value = "";
-    renderNodePicker();
+    selectedNodes.add(v); e.target.value = ""; renderNodePicker();
   }
 });
 
-// ---------- cron 预设 ----------
-
-function syncPresetHighlight() {
-  const cur = $("f_cron").value.trim();
-  document.querySelectorAll("#cronPresets button").forEach(b => {
-    b.classList.toggle("active", b.dataset.cron === cur);
-  });
-}
-$("cronPresets").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-cron]");
-  if (!b) return;
-  $("f_cron").value = b.dataset.cron;
-  syncPresetHighlight();
-});
-$("f_cron").addEventListener("input", syncPresetHighlight);
-
 // ---------- 弹框 ----------
-
 function openForm(task) {
   $("formTitle").textContent = task ? "编辑任务" : "新建任务";
   $("f_id").value = task?.id ?? "";
   $("f_name").value = task?.name ?? "";
-  $("f_cron").value = task?.cron ?? "0 3 * * *";
+  cronToFreq(task?.cron ?? "0 3 * * *");
+  updateCronPreview();
   $("f_command").value = task?.command ?? "";
   $("f_timeout").value = task?.timeout ?? 300;
   $("f_notify").checked = task ? !!task.notify : true;
@@ -544,28 +665,23 @@ function openForm(task) {
   selectedNodes = new Set(task?.nodes ?? []);
   $("nodeFilter").value = "";
   renderNodePicker();
-  syncPresetHighlight();
   dialog.showModal();
   $("f_name").focus();
 }
-
 function closeForm() { dialog.close(); }
-
 async function saveForm(e) {
   e.preventDefault();
-  if (!selectedNodes.size) {
-    toast("请至少选择一个目标节点");
-    return;
-  }
+  if (!selectedNodes.size) { toast("请至少选择一个目标节点"); return; }
   const payload = {
     id: $("f_id").value,
     name: $("f_name").value.trim(),
-    cron: $("f_cron").value.trim(),
+    cron: buildCronExpr(),
     command: $("f_command").value,
     nodes: [...selectedNodes],
     timeout: Number($("f_timeout").value || 300),
     notify: $("f_notify").checked,
     enabled: $("f_enabled").checked,
+    _operator: CURRENT_USER,
   };
   try {
     const r = await rpc("crontask.save", payload);
@@ -574,25 +690,23 @@ async function saveForm(e) {
     closeForm();
     await refreshTasks();
     await refreshHistory();
-  } catch (e2) {
-    showError("保存失败: " + e2.message);
-  }
+    await refreshAudit();
+  } catch (e2) { showError("保存失败: " + e2.message); }
 }
 
 // ---------- 操作 ----------
-
 async function onTaskAction(act, id) {
   try {
     switch (act) {
       case "toggle": {
         const r0 = await rpc("crontask.list");
         const t0 = r0.tasks.find((x) => x.id === id);
-        await rpc("crontask.setEnabled", { id, enabled: !t0?.enabled });
+        await rpc("crontask.setEnabled", { id, enabled: !t0?.enabled, _operator: CURRENT_USER });
         toast(t0?.enabled ? "已停用" : "已启用");
         break;
       }
       case "run": {
-        await rpc("crontask.run", { id });
+        await rpc("crontask.run", { id, _operator: CURRENT_USER });
         toast("已触发执行");
         setTimeout(refreshHistory, 4000);
         break;
@@ -605,26 +719,23 @@ async function onTaskAction(act, id) {
       }
       case "del": {
         if (!confirm("确认删除该任务？")) return;
-        await rpc("crontask.delete", { id });
+        await rpc("crontask.delete", { id, _operator: CURRENT_USER });
         toast("已删除");
         break;
       }
     }
     await refreshTasks();
     await refreshHistory();
-  } catch (e) {
-    showError("操作失败: " + e.message);
-  }
+    await refreshAudit();
+  } catch (e) { showError("操作失败: " + e.message); }
 }
-
 $("tasksBody").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-act]");
   if (!btn) return;
   onTaskAction(btn.dataset.act, btn.closest("tr").dataset.id);
 });
 
-// ---------- 执行历史 ----------
-
+// ---------- 执行历史（可展开） ----------
 function nodeResultBlock(r) {
   const label = nodeLabel(r.client);
   const exit = r.exit_code;
@@ -639,8 +750,7 @@ function nodeResultBlock(r) {
     <div class="h-out">${esc(r.result)}</div>
   </div>`;
 }
-
-function historyItem(h) {
+function historyItem(h, open) {
   const failed = h.results.some((r) => r.exit_code !== 0);
   const verdict = h.timedOut
     ? '<span class="badge warn">超时</span>'
@@ -649,40 +759,104 @@ function historyItem(h) {
   const results = h.results.length
     ? h.results.map(nodeResultBlock).join("")
     : '<div class="h-noresult">（本轮没有收到任何节点的结果）</div>';
-  return `<div class="h-item">
-    <div class="h-head">
+  return `<div class="h-item ${open ? "open" : ""}">
+    <div class="h-head" data-toggle>
       <span class="h-name">${esc(h.name)}</span>
       ${verdict}
-      <span class="h-time" title="${esc(absTime)}">${esc(timeAgo(h.ts))} · ${esc(absTime)}</span>
+      <span class="h-time" title="${esc(absTime)}">${esc(timeAgo(h.ts))}</span>
+      <span class="h-toggle">▾</span>
     </div>
-    <div class="h-cmd" title="${esc(h.command)}">${esc(h.command)}</div>
-    ${results}
+    <div class="h-body" ${open ? "" : "hidden"}>
+      <div class="h-cmd" title="${esc(h.command)}">${esc(h.command)}</div>
+      ${results}
+    </div>
   </div>`;
 }
-
+const AUDIT_ACTION = {
+  create: ["创建", "ok"], update: ["更新", "ok"], delete: ["删除", "fail"],
+  enable: ["启用", "ok"], disable: ["停用", "warn"], run: ["手动执行", "ok"],
+};
+let CURRENT_USER = "admin";
+async function loadCurrentUser() {
+  try {
+    const me = await rpc("common:getMe");
+    if (me && me.username) CURRENT_USER = me.username;
+  } catch { /* keep default */ }
+}
+function auditRow(a) {
+  const [label, tone] = AUDIT_ACTION[a.action] || [a.action, ""];
+  return `<div class="h-item">
+    <div class="h-head" style="cursor:default">
+      <span class="h-name">${esc(label)}</span>
+      <span class="badge ${tone}">${esc(a.taskName)}</span>
+      <span class="h-time" title="${esc(new Date(a.ts).toLocaleString())}">${esc(timeAgo(a.ts))}</span>
+    </div>
+    <div class="h-body" style="display:block;border-top:1px solid #f1f5f9;padding:8px 14px">
+      <span class="muted">操作者：</span><strong>${esc(a.operator)}</strong>
+      <span class="muted" style="margin-left:12px">${esc(a.detail)}</span>
+    </div>
+  </div>`;
+}
+async function refreshAudit() {
+  try {
+    const r = await rpc("crontask.audit", { limit: 100 });
+    const items = r.audit || [];
+    $("auditCount").textContent = items.length ? `共 ${items.length} 条` : "";
+    $("auditList").innerHTML = items.length
+      ? items.map(auditRow).join("")
+      : '<div class="empty">暂无操作记录</div>';
+  } catch (e) {
+    $("auditList").innerHTML = '<div class="empty">操作日志加载失败: ' + esc(e.message) + "</div>";
+  }
+}
 async function refreshHistory() {
   try {
     const r = await rpc("crontask.history", { limit: 50 });
-    $("historyList").innerHTML = r.history.length
-      ? r.history.map(historyItem).join("")
+    const items = r.history || [];
+    $("historyCount").textContent = items.length ? `共 ${items.length} 条` : "";
+    $("historyList").innerHTML = items.length
+      ? items.map(h => historyItem(h, false)).join("")
       : '<div class="empty">暂无执行记录，任务触发后会显示在这里</div>';
   } catch (e) {
     $("historyList").innerHTML = '<div class="empty">历史加载失败: ' + esc(e.message) + "</div>";
   }
 }
+$("historyList").addEventListener("click", (e) => {
+  const head = e.target.closest(".h-head[data-toggle]");
+  if (!head) return;
+  const item = head.closest(".h-item");
+  const body = item.querySelector(".h-body");
+  const isOpen = !body.hidden;
+  body.hidden = isOpen;
+  item.classList.toggle("open", !isOpen);
+});
+$("btnExpandAll").addEventListener("click", () => {
+  document.querySelectorAll(".h-item").forEach(item => {
+    item.querySelector(".h-body").hidden = false;
+    item.classList.add("open");
+  });
+});
+$("btnCollapseAll").addEventListener("click", () => {
+  document.querySelectorAll(".h-item").forEach(item => {
+    item.querySelector(".h-body").hidden = true;
+    item.classList.remove("open");
+  });
+});
 
 // ---------- 初始化 ----------
-
 $("btnNew").addEventListener("click", () => openForm(null));
 $("btnClose").addEventListener("click", closeForm);
 $("btnCancel").addEventListener("click", closeForm);
-$("btnRefresh").addEventListener("click", () => { refreshTasks(); refreshHistory(); });
+$("btnRefresh").addEventListener("click", () => { refreshTasks(); refreshHistory(); refreshAudit(); });
+$("btnRefreshAudit").addEventListener("click", refreshAudit);
 $("taskForm").addEventListener("submit", saveForm);
 dialog.addEventListener("cancel", (e) => { e.preventDefault(); closeForm(); });
 
 (async () => {
+  await loadCurrentUser();
   await refreshTasks();
   await refreshHistory();
+  await refreshAudit();
 })();
 </script>
 </body>
