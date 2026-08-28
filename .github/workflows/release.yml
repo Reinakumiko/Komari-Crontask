@@ -63,3 +63,56 @@ jobs:
           else
             gh release create "$TAG" --title "$TAG" --generate-notes "$ASSET"
           fi
+
+      # catalog 更新内联执行：GITHUB_TOKEN 创建的 release 不会级联触发
+      # 其他 workflow（GitHub 防递归机制），因此不能依赖 on: release 钩子。
+      - name: Update plugin catalog (market/v1.json)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${VERSION#v}"
+          TAG="v${VERSION}"
+          ASSET="crontask-${VERSION}.zip"
+          gh release download "$TAG" --repo "$REPO" --pattern "$ASSET" --dir dist-check
+
+          unzip -o -q "dist-check/$ASSET" -d dist-check/unpacked
+          SHORT=$(python3 -c "import json;print(json.load(open('dist-check/unpacked/komari-plugin.json'))['short'])")
+          VER=$(python3 -c "import json;print(json.load(open('dist-check/unpacked/komari-plugin.json'))['version'])")
+          [ "$SHORT" = "crontask" ] || { echo "::error::manifest short mismatch: $SHORT"; exit 1; }
+          [ "$VER" = "$VERSION" ] || { echo "::error::manifest version mismatch: $VER != $VERSION"; exit 1; }
+
+          SHA=$(sha256sum "dist-check/$ASSET" | cut -d' ' -f1)
+          REPO_URL="https://github.com/$REPO"
+          DOWNLOAD="$REPO_URL/releases/download/${TAG}/${ASSET}"
+
+          python3 - "$VERSION" "$SHA" "$REPO_URL" "$DOWNLOAD" <<'PYEOF'
+          import json, sys, datetime
+          tag, sha, repo_url, download = sys.argv[1:5]
+          path = "market/v1.json"
+          with open(path) as f:
+              catalog = json.load(f)
+          entry = next((p for p in catalog["plugins"] if p["short"] == "crontask"), None)
+          if entry is None:
+              raise SystemExit("catalog entry for 'crontask' not found")
+          entry["version"] = tag
+          entry["download"] = download
+          entry["sha256"] = sha
+          catalog["updated_at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+          with open(path, "w") as f:
+              json.dump(catalog, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          print(f"catalog updated: version={tag} sha256={sha}")
+          PYEOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add market/v1.json
+          if git diff --cached --quiet; then
+            echo "no catalog changes"
+          else
+            git commit -m "chore(market): update catalog for ${TAG}"
+            git push origin HEAD:main
+          fi

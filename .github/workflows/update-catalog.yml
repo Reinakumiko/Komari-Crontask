@@ -1,16 +1,16 @@
 name: Update plugin catalog
 
-# Release 发布时自动更新 market/v1.json：
-# 下载 Release 里的 crontask-*.zip，校验根 manifest 的 short/version，
-# 计算 SHA-256 并写回 catalog，提交到 main 分支。
-# Komari 侧的自定义市场源指向
-#   https://raw.githubusercontent.com/<owner>/<repo>/main/market/v1.json
-# 之后即可在插件市场看到新版本。
+# 手动兜底入口：release.yml 已内联执行 catalog 更新（GITHUB_TOKEN 创建的
+# release 不会级联触发本 workflow，on: release 在实践中不会被激活）。
+# 需要重算/修补 market/v1.json 时手动运行。
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to sync from (e.g. v0.3.2); empty = latest'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -25,9 +25,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.inputs.tag }}
         run: |
           set -euo pipefail
+          if [ -z "$TAG" ]; then TAG=$(gh release list --repo "$REPO" --limit 1 --json tagName -q '.[0].tagName'); fi
           TAG="${TAG#v}"
           ASSET="crontask-${TAG}.zip"
           echo ">> release tag: v${TAG}, asset: ${ASSET}"
