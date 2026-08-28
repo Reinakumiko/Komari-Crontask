@@ -61,17 +61,17 @@ npm run pack        # 产出 dist/crontask-0.3.0.zip
 
 ### 方式一：自有插件市场源（推荐）
 
-本仓库自带 `market/v1.json`（Komari 插件市场目录格式）与 `.github/workflows/update-catalog.yml`（Release 发布时自动更新版本号与 SHA-256）。
+发布全自动：**打 tag 即发布**。
 
-1. 把本仓库推到你的 GitHub，打包发 Release（tag `v0.3.0`，附件 `dist/crontask-0.3.0.zip`）
-2. Action 会自动校验 zip 并更新 `market/v1.json`
-3. 在 Komari 后台「插件 → 市场来源」添加：
+1. 改版本号（`komari-plugin.json` + `package.json` 同步），提交推送
+2. `git tag v0.3.2 && git push origin v0.3.2`
+3. `release.yml` 自动：校验 manifest 版本与 tag 一致 → typecheck / 测试 / 打包 → 创建 Release 并上传 zip
+4. `update-catalog.yml` 自动：下载附件 → 校验 → 计算 SHA-256 → 更新 `market/v1.json` 并提交
+5. Komari 后台「插件 → 市场来源」添加（一次性）：
    ```
    https://raw.githubusercontent.com/Reinakumiko/Komari-Crontask/main/market/v1.json
    ```
-4. 之后每次发新 Release，市场列表自动跟上，后台一键更新
-
-> 记得把 `market/v1.json` 里的 `YOUR_USERNAME` 与 `author` 改成你自己的（首次提交前）。
+6. 之后每次打 tag 发版，市场列表自动跟上，后台一键安装/更新
 
 ### 方式二：官方市场
 
