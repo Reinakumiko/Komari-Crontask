@@ -1,0 +1,26 @@
+{
+  "name": "komari-plugin-crontask",
+  "version": "0.3.1",
+  "private": true,
+  "description": "Komari Cron Task 插件：按 cron 计划在节点上定时执行命令",
+  "scripts": {
+    "check": "komari-plugin-dev check",
+    "build": "komari-plugin-dev build",
+    "pack": "komari-plugin-dev pack",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && tsc src/core.ts test/core.test.ts test/host.test.ts --outDir .testbuild --module commonjs --target ES2020 --moduleResolution node --esModuleInterop --skipLibCheck && node --test --test-concurrency=1 .testbuild/test/",
+    "plugin:install": "komari-plugin-dev install --enable",
+    "dev": "komari-plugin-dev dev"
+  },
+  "komari": {
+    "source": "src/plugin.ts"
+  },
+  "dependencies": {
+    "@komari-monitor/plugin-sdk": "1.4.3"
+  },
+  "devDependencies": {
+    "@komari-monitor/plugin-dev": "1.4.3",
+    "@types/node": "^18.19.130",
+    "typescript": "^5.0.0"
+  }
+}
