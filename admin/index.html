@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>定时任务 · Cron Task</title>
+<style>
+  :root {
+    --bg: #f1f5f9; --card: #fff; --border: #e2e8f0;
+    --text: #0f172a; --muted: #64748b; --faint: #94a3b8;
+    --primary: #0284c7; --primary-soft: #e0f2fe;
+    --danger: #dc2626; --danger-soft: #fee2e2;
+    --success: #16a34a; --success-soft: #dcfce7;
+    --warn: #d97706; --warn-soft: #fef3c7;
+    --radius: 10px;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.65 -apple-system, system-ui, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif; }
+
+  /* ---------- 顶栏 ---------- */
+  header { position: sticky; top: 0; z-index: 10;
+           background: rgba(255,255,255,.92); backdrop-filter: blur(8px);
+           border-bottom: 1px solid var(--border);
+           padding: 14px 28px; display: flex; align-items: center; gap: 12px; }
+  header .brand { display: flex; align-items: baseline; gap: 10px; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 650; letter-spacing: .2px; }
+  header .ver { color: var(--faint); font-size: 12px; font-family: var(--mono); }
+  header .actions { margin-left: auto; display: flex; gap: 8px; }
+
+  main { max-width: 1000px; margin: 24px auto 40px; padding: 0 20px; }
+
+  /* ---------- 通用 ---------- */
+  button { background: var(--primary); color: #fff; border: 0; border-radius: 8px;
+           padding: 7px 14px; font-size: 13px; cursor: pointer; transition: filter .12s; }
+  button:hover { filter: brightness(1.08); }
+  button.secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+  button.secondary:hover { background: #f8fafc; filter: none; }
+  button.danger { background: var(--danger); }
+  button.ghost { background: transparent; color: var(--primary); padding: 4px 8px; }
+  button.ghost:hover { background: var(--primary-soft); filter: none; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+          padding: 18px 20px; margin-bottom: 18px;
+          box-shadow: 0 1px 2px rgba(15,23,42,.04); }
+  .card-title { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; font-size: 14px; font-weight: 650; }
+  .card-title .sub { color: var(--faint); font-size: 12px; font-weight: 400; }
+
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 1px 9px;
+           border-radius: 999px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .badge.ok     { background: var(--success-soft); color: var(--success); }
+  .badge.fail   { background: var(--danger-soft);  color: var(--danger); }
+  .badge.warn   { background: var(--warn-soft);    color: var(--warn); }
+  .badge.on     { background: var(--success-soft); color: var(--success); }
+  .badge.off    { background: #f1f5f9;             color: var(--faint); }
+
+  .muted { color: var(--muted); }
+  .mono  { font-family: var(--mono); }
+  .error-banner { background: var(--danger-soft); color: var(--danger); border: 1px solid #fecaca;
+                  border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; display: none; }
+  .empty { color: var(--faint); text-align: center; padding: 36px 0; font-size: 13px; }
+  .toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+           background: #0f172a; color: #fff; padding: 9px 18px; border-radius: 999px; font-size: 13px;
+           opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 99;
+           box-shadow: 0 8px 24px rgba(15,23,42,.3); }
+  .toast.show { opacity: 1; }
+
+  /* ---------- 任务表 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th { text-align: left; padding: 8px 10px; color: var(--faint); font-weight: 500;
+       font-size: 12px; text-transform: uppercase; letter-spacing: .4px;
+       border-bottom: 1px solid var(--border); }
+  td { padding: 12px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  tr:last-child td { border-bottom: 0; }
+  tr:hover td { background: #f8fafc; }
+  .t-name { font-weight: 600; }
+  .t-cron { color: var(--muted); font-size: 12px; font-family: var(--mono); margin-top: 1px; }
+  .t-cmd { font-family: var(--mono); font-size: 12px; background: #f8fafc; border: 1px solid #eef2f7;
+           padding: 3px 8px; border-radius: 6px; display: inline-block; max-width: 340px;
+           overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+  .node-pill { display: inline-block; background: var(--primary-soft); color: #075985;
+               border-radius: 6px; padding: 1px 8px; font-size: 12px; margin: 1px 3px 1px 0; }
+  .node-pill.custom { background: var(--warn-soft); color: #92400e; }
+  .row-actions { display: flex; gap: 4px; }
+  .row-actions button { padding: 4px 10px; font-size: 12px; }
+
+  /* ---------- 历史记录 ---------- */
+  .h-item { border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 10px;
+            overflow: hidden; background: #fff; }
+  .h-item:hover { border-color: #cbd5e1; }
+  .h-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+  .h-name { font-weight: 650; font-size: 13.5px; }
+  .h-time { color: var(--faint); font-size: 12px; margin-left: auto; }
+  .h-cmd { font-family: var(--mono); font-size: 12px; color: var(--muted);
+           background: #f8fafc; padding: 6px 14px; border-top: 1px solid #f1f5f9;
+           border-bottom: 1px solid #f1f5f9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .h-cmd::before { content: "$ "; color: var(--faint); }
+  .h-node { padding: 10px 14px; }
+  .h-node + .h-node { border-top: 1px dashed #eef2f7; }
+  .h-node-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .h-node-name { font-weight: 600; font-size: 13px; }
+  .h-exit { font-family: var(--mono); font-size: 11.5px; padding: 1px 8px; border-radius: 6px; }
+  .h-exit.zero { background: var(--success-soft); color: var(--success); }
+  .h-exit.nonzero { background: var(--danger-soft); color: var(--danger); }
+  .h-out { background: #0f172a; color: #e2e8f0; font-family: var(--mono); font-size: 12px;
+           line-height: 1.55; border-radius: 8px; padding: 10px 12px;
+           white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow-y: auto; }
+  .h-out:empty::after { content: "（无输出）"; color: #64748b; }
+  .h-noresult { color: var(--faint); font-size: 12px; padding: 0 14px 10px; }
+
+  /* ---------- 弹框 ---------- */
+  dialog { border: 0; border-radius: 14px; padding: 0;
+           width: min(620px, calc(100vw - 32px));
+           box-shadow: 0 24px 64px rgba(15,23,42,.28); }
+  dialog::backdrop { background: rgba(15, 23, 42, .45); backdrop-filter: blur(2px); }
+  .dlg-head { display: flex; align-items: center; padding: 16px 22px;
+              border-bottom: 1px solid var(--border); }
+  .dlg-head h2 { font-size: 15px; margin: 0; font-weight: 650; }
+  .dlg-head .close { margin-left: auto; background: none; color: var(--faint); font-size: 17px; padding: 2px 8px; }
+  .dlg-head .close:hover { color: var(--text); background: #f1f5f9; filter: none; }
+  .dlg-body { padding: 18px 22px; max-height: calc(100vh - 220px); overflow-y: auto; }
+  .dlg-foot { display: flex; justify-content: flex-end; gap: 8px;
+              padding: 13px 22px; border-top: 1px solid var(--border); background: #f8fafc;
+              border-radius: 0 0 14px 14px; }
+
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .full { grid-column: 1 / -1; }
+  label { display: block; font-size: 12.5px; margin-bottom: 5px; font-weight: 600; color: #334155; }
+  input[type=text], input[type=number], textarea {
+    width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 13px; font-family: inherit; background: #fff; transition: border-color .12s, box-shadow .12s; }
+  input:focus, textarea:focus { outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  textarea { resize: vertical; min-height: 72px; font-family: var(--mono); font-size: 12.5px; }
+  .hint { color: var(--faint); font-size: 11.5px; margin-top: 4px; }
+  .checks { display: flex; gap: 18px; align-self: end; padding-bottom: 9px; }
+  .checks label { font-weight: 400; margin: 0; display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  .checks input { accent-color: var(--primary); }
+
+  /* ---------- 节点选择器 ---------- */
+  .node-picker { border: 1px solid var(--border); border-radius: 8px; background: #fff; overflow: hidden; }
+  .node-picker:focus-within { border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  .node-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px; min-height: 42px; }
+  .node-chips .placeholder { color: var(--faint); font-size: 12px; align-self: center; padding: 0 4px; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; background: var(--primary-soft);
+          color: #075985; border-radius: 999px; padding: 2.5px 6px 2.5px 11px; font-size: 12px; font-weight: 500; }
+  .chip button { background: none; color: #075985; padding: 0 4px; font-size: 13px; line-height: 1; }
+  .chip button:hover { color: var(--danger); }
+  .chip.custom { background: var(--warn-soft); color: #92400e; font-family: var(--mono); font-size: 11px; }
+  .node-search { border-top: 1px solid #f1f5f9; }
+  .node-search input { border: 0; padding: 8px 10px; font-size: 13px; background: transparent; }
+  .node-search input:focus { outline: none; box-shadow: none; }
+  .node-list { max-height: 170px; overflow-y: auto; border-top: 1px solid #f1f5f9; }
+  .node-item { display: flex; align-items: center; gap: 9px; padding: 7px 11px; cursor: pointer; }
+  .node-item:hover { background: #f8fafc; }
+  .node-item input { accent-color: var(--primary); }
+  .node-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--success); }
+  .node-empty { padding: 12px; color: var(--faint); font-size: 12px; }
+  .node-add-custom { padding: 8px 11px; font-size: 12px; color: var(--muted); }
+  .node-add-custom button { font-size: 12px; padding: 3px 9px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <h1>定时任务</h1>
+    <span class="ver">cron-task</span>
+  </div>
+  <div class="actions">
+    <button class="secondary" id="btnRefresh">刷新</button>
+    <button id="btnNew">＋ 新建任务</button>
+  </div>
+</header>
+
+<main>
+  <div class="error-banner" id="errorBanner"></div>
+
+  <div class="card">
+    <div class="card-title">任务 <span class="sub" id="taskCount"></span></div>
+    <table>
+      <thead>
+        <tr><th style="width:22%">任务</th><th>命令</th><th style="width:20%">目标节点</th><th style="width:9%">状态</th><th style="width:200px">操作</th></tr>
+      </thead>
+      <tbody id="tasksBody"></tbody>
+    </table>
+    <div class="empty" id="tasksEmpty" style="display:none">暂无任务，点击右上角「新建任务」开始</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">执行历史 <span class="sub">最新在前 · 保留 200 条</span></div>
+    <div id="historyList"><div class="empty">加载中…</div></div>
+  </div>
+</main>
+
+<!-- 新建/编辑任务弹框 -->
+<dialog id="taskDialog">
+  <form id="taskForm" method="dialog" style="margin:0">
+    <div class="dlg-head">
+      <h2 id="formTitle">新建任务</h2>
+      <button type="button" class="close" id="btnClose" aria-label="关闭">✕</button>
+    </div>
+    <div class="dlg-body">
+      <input type="hidden" id="f_id">
+      <div class="grid">
+        <div>
+          <label for="f_name">任务名称</label>
+          <input type="text" id="f_name" placeholder="例如: 每日磁盘清理" required>
+        </div>
+        <div>
+          <label for="f_cron">执行周期</label>
+          <input type="text" id="f_cron" placeholder="0 3 * * *" value="0 3 * * *" required>
+          <div class="hint">cron 五字段，或 @every 1m / @every 2h</div>
+        </div>
+        <div class="full">
+          <label for="f_command">命令</label>
+          <textarea id="f_command" placeholder="在每个目标节点上执行的 shell 命令" required></textarea>
+        </div>
+        <div class="full">
+          <label>目标节点 <span class="hint" style="display:inline">已选 <b id="nodeCount">0</b> 个</span></label>
+          <div class="node-picker">
+            <div class="node-chips" id="nodeChips"><span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span></div>
+            <div class="node-search">
+              <input type="text" id="nodeFilter" placeholder="搜索节点…">
+            </div>
+            <div class="node-list" id="nodeList"></div>
+          </div>
+        </div>
+        <div>
+          <label for="f_timeout">等待结果超时（秒）</label>
+          <input type="number" id="f_timeout" value="300" min="1" max="3600">
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="f_notify" checked> 失败时通知</label>
+          <label><input type="checkbox" id="f_enabled" checked> 启用</label>
+        </div>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="secondary" id="btnCancel">取消</button>
+      <button type="submit" id="btnSave">保存任务</button>
+    </div>
+  </form>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+let NODES = [];                 // [{uuid, name}]
+let selectedNodes = new Set();
+const dialog = $("taskDialog");
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function showError(msg) {
+  const b = $("errorBanner");
+  b.textContent = msg;
+  b.style.display = msg ? "block" : "none";
+}
+
+async function rpc(method, params) {
+  const res = await fetch("/api/rpc2", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: params ?? {} }),
+  });
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const body = await res.json();
+  if (body.error) throw new Error(body.error.message || body.error.code);
+  return body.result;
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  }[c]));
+}
+
+function nodeLabel(id) {
+  const n = NODES.find((x) => x.uuid === id);
+  return n && n.name ? n.name : null; // null = 未知/自定义节点
+}
+
+function timeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime();
+  if (diff < 60e3) return "刚刚";
+  if (diff < 3600e3) return Math.floor(diff / 60e3) + " 分钟前";
+  if (diff < 86400e3) return Math.floor(diff / 3600e3) + " 小时前";
+  return Math.floor(diff / 86400e3) + " 天前";
+}
+
+// ---------- 任务列表 ----------
+
+function nodePills(ids) {
+  return ids.map((id) => {
+    const label = nodeLabel(id);
+    return label
+      ? `<span class="node-pill" title="${esc(id)}">${esc(label)}</span>`
+      : `<span class="node-pill custom" title="节点已不在线，保留 ID">${esc(id.slice(0, 8))}…</span>`;
+  }).join("");
+}
+
+function taskRow(t) {
+  const status = t.enabled
+    ? '<span class="badge on">启用</span>'
+    : '<span class="badge off">停用</span>';
+  return `<tr data-id="${esc(t.id)}">
+    <td><div class="t-name">${esc(t.name)}</div><div class="t-cron">${esc(t.cron)}</div></td>
+    <td><span class="t-cmd" title="${esc(t.command)}">${esc(t.command)}</span></td>
+    <td>${nodePills(t.nodes)}</td>
+    <td>${status}</td>
+    <td><div class="row-actions">
+      <button data-act="toggle" class="secondary">${t.enabled ? "停用" : "启用"}</button>
+      <button data-act="run" class="secondary">执行</button>
+      <button data-act="edit" class="ghost">编辑</button>
+      <button data-act="del" class="ghost" style="color:var(--danger)">删除</button>
+    </div></td>
+  </tr>`;
+}
+
+async function refreshTasks() {
+  try {
+    const r = await rpc("crontask.list");
+    try {
+      const nodesResp = await rpc("common:getNodes");
+      NODES = Object.entries(nodesResp || {}).map(([uuid, info]) => ({ uuid, name: info.name || uuid }));
+    } catch {
+      NODES = [];
+    }
+    renderNodeList();
+    const tbody = $("tasksBody");
+    $("taskCount").textContent = r.tasks.length ? `共 ${r.tasks.length} 个` : "";
+    if (!r.tasks.length) {
+      tbody.innerHTML = "";
+      $("tasksEmpty").style.display = "block";
+    } else {
+      $("tasksEmpty").style.display = "none";
+      tbody.innerHTML = r.tasks.map(taskRow).join("");
+    }
+  } catch (e) {
+    showError("加载任务失败: " + e.message);
+  }
+}
+
+// ---------- 节点选择器 ----------
+
+function renderNodeList() {
+  const filter = $("nodeFilter").value.trim().toLowerCase();
+  const list = $("nodeList");
+  const matches = NODES.filter((n) =>
+    !filter || n.name.toLowerCase().includes(filter) || n.uuid.toLowerCase().includes(filter));
+  let html = matches.map((n) => `
+    <label class="node-item" title="${esc(n.uuid)}">
+      <input type="checkbox" data-uuid="${esc(n.uuid)}" ${selectedNodes.has(n.uuid) ? "checked" : ""}>
+      <span class="node-dot"></span>
+      <span>${esc(n.name)}</span>
+    </label>`).join("");
+  if (filter && !matches.length && /^[0-9a-f-]{8,}$/i.test(filter)) {
+    html = `<div class="node-add-custom">没有匹配的在线节点，<button type="button" id="btnAddCustom">添加为节点 ID</button></div>`;
+  } else if (!matches.length) {
+    html = `<div class="node-empty">没有匹配的节点。</div>`;
+  }
+  list.innerHTML = html;
+  const custom = $("btnAddCustom");
+  if (custom) custom.addEventListener("click", () => {
+    selectedNodes.add(filter);
+    $("nodeFilter").value = "";
+    renderNodePicker();
+  });
+}
+
+function renderChips() {
+  const chips = $("nodeChips");
+  $("nodeCount").textContent = String(selectedNodes.size);
+  if (!selectedNodes.size) {
+    chips.innerHTML = '<span class="placeholder">在下方列表勾选，或粘贴节点 ID 后回车</span>';
+    return;
+  }
+  chips.innerHTML = [...selectedNodes].map((id) => {
+    const label = nodeLabel(id);
+    return label
+      ? `<span class="chip" title="${esc(id)}">${esc(label)}<button type="button" data-remove="${esc(id)}" aria-label="移除">✕</button></span>`
+      : `<span class="chip custom" title="节点已不在线">${esc(id)}<button type="button" data-remove="${esc(id)}" aria-label="移除">✕</button></span>`;
+  }).join("");
+}
+
+function renderNodePicker() {
+  renderChips();
+  renderNodeList();
+}
+
+$("nodeList").addEventListener("change", (e) => {
+  const cb = e.target.closest("input[data-uuid]");
+  if (!cb) return;
+  cb.checked ? selectedNodes.add(cb.dataset.uuid) : selectedNodes.delete(cb.dataset.uuid);
+  renderChips();
+});
+
+$("nodeChips").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-remove]");
+  if (!btn) return;
+  selectedNodes.delete(btn.dataset.remove);
+  renderNodePicker();
+});
+
+$("nodeFilter").addEventListener("input", renderNodeList);
+$("nodeFilter").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const v = e.target.value.trim();
+  if (v && /^[0-9a-f-]{8,}$/i.test(v) && !NODES.some((n) => n.uuid === v)) {
+    selectedNodes.add(v);
+    e.target.value = "";
+    renderNodePicker();
+  }
+});
+
+// ---------- 弹框 ----------
+
+function openForm(task) {
+  $("formTitle").textContent = task ? "编辑任务" : "新建任务";
+  $("f_id").value = task?.id ?? "";
+  $("f_name").value = task?.name ?? "";
+  $("f_cron").value = task?.cron ?? "0 3 * * *";
+  $("f_command").value = task?.command ?? "";
+  $("f_timeout").value = task?.timeout ?? 300;
+  $("f_notify").checked = task ? !!task.notify : true;
+  $("f_enabled").checked = task ? !!task.enabled : true;
+  selectedNodes = new Set(task?.nodes ?? []);
+  $("nodeFilter").value = "";
+  renderNodePicker();
+  dialog.showModal();
+  $("f_name").focus();
+}
+
+function closeForm() { dialog.close(); }
+
+async function saveForm(e) {
+  e.preventDefault();
+  if (!selectedNodes.size) {
+    toast("请至少选择一个目标节点");
+    return;
+  }
+  const payload = {
+    id: $("f_id").value,
+    name: $("f_name").value.trim(),
+    cron: $("f_cron").value.trim(),
+    command: $("f_command").value,
+    nodes: [...selectedNodes],
+    timeout: Number($("f_timeout").value || 300),
+    notify: $("f_notify").checked,
+    enabled: $("f_enabled").checked,
+  };
+  try {
+    const r = await rpc("crontask.save", payload);
+    if (!r.ok) throw new Error(r.error);
+    toast("已保存");
+    closeForm();
+    await refreshTasks();
+    await refreshHistory();
+  } catch (e2) {
+    showError("保存失败: " + e2.message);
+  }
+}
+
+// ---------- 操作 ----------
+
+async function onTaskAction(act, id) {
+  try {
+    switch (act) {
+      case "toggle": {
+        const r0 = await rpc("crontask.list");
+        const t0 = r0.tasks.find((x) => x.id === id);
+        await rpc("crontask.setEnabled", { id, enabled: !t0?.enabled });
+        toast("已更新");
+        break;
+      }
+      case "run": {
+        await rpc("crontask.run", { id });
+        toast("已触发执行");
+        setTimeout(refreshHistory, 4000);
+        break;
+      }
+      case "edit": {
+        const r = await rpc("crontask.list");
+        const t = r.tasks.find((x) => x.id === id);
+        if (t) openForm(t);
+        return;
+      }
+      case "del": {
+        if (!confirm("确认删除该任务？")) return;
+        await rpc("crontask.delete", { id });
+        toast("已删除");
+        break;
+      }
+    }
+    await refreshTasks();
+    await refreshHistory();
+  } catch (e) {
+    showError("操作失败: " + e.message);
+  }
+}
+
+$("tasksBody").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-act]");
+  if (!btn) return;
+  onTaskAction(btn.dataset.act, btn.closest("tr").dataset.id);
+});
+
+// ---------- 执行历史 ----------
+
+function nodeResultBlock(r) {
+  const label = nodeLabel(r.client);
+  const exit = r.exit_code;
+  const exitCls = exit === 0 ? "zero" : "nonzero";
+  const exitText = exit === null || exit === undefined ? "未返回" : `exit ${exit}`;
+  const name = label ? esc(label) : `<span class="mono" style="font-size:11px">${esc(r.client.slice(0, 13))}…</span>`;
+  return `<div class="h-node">
+    <div class="h-node-head">
+      <span class="h-node-name">${name}</span>
+      <span class="h-exit ${exitCls}">${exitText}</span>
+    </div>
+    <div class="h-out">${esc(r.result)}</div>
+  </div>`;
+}
+
+function historyItem(h) {
+  const failed = h.results.some((r) => r.exit_code !== 0);
+  const verdict = h.timedOut
+    ? '<span class="badge warn">超时</span>'
+    : failed ? '<span class="badge fail">失败</span>' : '<span class="badge ok">成功</span>';
+  const absTime = new Date(h.ts).toLocaleString();
+  const results = h.results.length
+    ? h.results.map(nodeResultBlock).join("")
+    : '<div class="h-noresult">（本轮没有收到任何节点的结果）</div>';
+  return `<div class="h-item">
+    <div class="h-head">
+      <span class="h-name">${esc(h.name)}</span>
+      ${verdict}
+      <span class="h-time" title="${esc(absTime)}">${esc(timeAgo(h.ts))} · ${esc(absTime)}</span>
+    </div>
+    <div class="h-cmd" title="${esc(h.command)}">${esc(h.command)}</div>
+    ${results}
+  </div>`;
+}
+
+async function refreshHistory() {
+  try {
+    const r = await rpc("crontask.history", { limit: 50 });
+    $("historyList").innerHTML = r.history.length
+      ? r.history.map(historyItem).join("")
+      : '<div class="empty">暂无执行记录，任务触发后会显示在这里</div>';
+  } catch (e) {
+    $("historyList").innerHTML = '<div class="empty">历史加载失败: ' + esc(e.message) + "</div>";
+  }
+}
+
+// ---------- 初始化 ----------
+
+$("btnNew").addEventListener("click", () => openForm(null));
+$("btnClose").addEventListener("click", closeForm);
+$("btnCancel").addEventListener("click", closeForm);
+$("btnRefresh").addEventListener("click", () => { refreshTasks(); refreshHistory(); });
+$("taskForm").addEventListener("submit", saveForm);
+dialog.addEventListener("cancel", (e) => { e.preventDefault(); closeForm(); });
+
+// 先加载任务与节点（refreshTasks 内会填充 NODES），再渲染历史，
+// 避免历史区因节点名未就绪而回退显示 uuid。
+(async () => {
+  await refreshTasks();
+  await refreshHistory();
+})();
+</script>
+</body>
+</html>
