@@ -1,0 +1,25 @@
+{
+  "schema": 1,
+  "updated_at": "1970-01-01T00:00:00.000Z",
+  "plugins": [
+    {
+      "name": {
+        "zh-CN": "定时任务",
+        "zh-TW": "定時任務",
+        "en": "Cron Task"
+      },
+      "short": "crontask",
+      "description": {
+        "zh-CN": "按 cron 计划在选定节点上定时执行 shell 命令，回收每个节点的执行结果，失败时发送通知。内置任务管理页面。",
+        "zh-TW": "依 cron 計畫在選定節點上定時執行 shell 指令，回收每個節點的執行結果，失敗時發送通知。內建任務管理頁面。",
+        "en": "Run commands on nodes on cron schedules, collect per-node results, and notify on failure. Includes a built-in management page."
+      },
+      "version": "0.3.1",
+      "author": "Reinakumiko",
+      "komari": ">=1.4.3",
+      "url": "https://github.com/Reinakumiko/Komari-Crontask",
+      "download": "https://github.com/Reinakumiko/Komari-Crontask/releases/download/v0.3.1/crontask-0.3.1.zip",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ]
+}

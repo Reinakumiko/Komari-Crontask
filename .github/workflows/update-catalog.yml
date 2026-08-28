@@ -1,0 +1,77 @@
+name: Update plugin catalog
+
+# Release 发布时自动更新 market/v1.json：
+# 下载 Release 里的 crontask-*.zip，校验根 manifest 的 short/version，
+# 计算 SHA-256 并写回 catalog，提交到 main 分支。
+# Komari 侧的自定义市场源指向
+#   https://raw.githubusercontent.com/<owner>/<repo>/main/market/v1.json
+# 之后即可在插件市场看到新版本。
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download release asset and update catalog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          TAG="${TAG#v}"
+          ASSET="crontask-${TAG}.zip"
+          echo ">> release tag: v${TAG}, asset: ${ASSET}"
+
+          gh release download "v${TAG}" --repo "$REPO" --pattern "$ASSET" --dir dist-check
+
+          # 校验 ZIP 根 manifest 与版本
+          unzip -o "dist-check/$ASSET" -d dist-check/unpacked
+          SHORT=$(python3 -c "import json;print(json.load(open('dist-check/unpacked/komari-plugin.json'))['short'])")
+          VER=$(python3 -c "import json;print(json.load(open('dist-check/unpacked/komari-plugin.json'))['version'])")
+          [ "$SHORT" = "crontask" ] || { echo "manifest short mismatch: $SHORT"; exit 1; }
+          [ "$VER" = "$TAG" ] || { echo "manifest version mismatch: $VER != $TAG"; exit 1; }
+
+          SHA=$(sha256sum "dist-check/$ASSET" | cut -d' ' -f1)
+          REPO_URL="https://github.com/$REPO"
+          DOWNLOAD="$REPO_URL/releases/download/v${TAG}/${ASSET}"
+
+          python3 - "$TAG" "$SHA" "$REPO_URL" "$DOWNLOAD" <<'EOF'
+          import json, sys, datetime
+          tag, sha, repo_url, download = sys.argv[1:5]
+          path = "market/v1.json"
+          with open(path) as f:
+              catalog = json.load(f)
+          entry = next((p for p in catalog["plugins"] if p["short"] == "crontask"), None)
+          if entry is None:
+              raise SystemExit("catalog entry for 'crontask' not found")
+          entry["version"] = tag
+          entry["download"] = download
+          entry["sha256"] = sha
+          catalog["updated_at"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+          with open(path, "w") as f:
+              json.dump(catalog, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          print(f"catalog updated: version={tag} sha256={sha}")
+          EOF
+
+      - name: Commit catalog update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add market/v1.json
+          if git diff --cached --quiet; then
+            echo "no catalog changes"
+          else
+            git commit -m "chore(market): update catalog for v${TAG}"
+            git push
+          fi
