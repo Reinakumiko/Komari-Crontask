@@ -44,8 +44,20 @@ type NodeInfo = {
 
 const TASKS_FILE = `${__storageDir__}/tasks.json`;
 const HISTORY_FILE = `${__storageDir__}/history.json`;
+const AUDIT_FILE = `${__storageDir__}/audit.json`;
 const HISTORY_LIMIT = 200;
+const AUDIT_LIMIT = 500;
 const POLL_INTERVAL_MS = 2000;
+
+/** One audit log entry (who did what to a task). */
+type AuditEntry = {
+  ts: string;
+  action: string;      // create | update | delete | enable | disable | run
+  operator: string;    // best-effort display name from the caller
+  taskId: string;
+  taskName: string;
+  detail: string;
+};
 
 /** In-flight guards: task id -> true while a round is still settling. */
 const inFlight = new Set<string>();
@@ -76,6 +88,24 @@ function loadTasksSync(): Task[] {
 
 function loadHistorySync(): HistoryEntry[] {
   return readJsonFileSync<HistoryEntry[]>(HISTORY_FILE, []);
+}
+
+function loadAuditSync(): AuditEntry[] {
+  return readJsonFileSync<AuditEntry[]>(AUDIT_FILE, []);
+}
+
+/** Appends one audit entry, keeping at most AUDIT_LIMIT entries (newest first). */
+function appendAuditSync(entry: AuditEntry): void {
+  try {
+    const items = loadAuditSync();
+    items.push(entry);
+    if (items.length > AUDIT_LIMIT) {
+      items.splice(0, items.length - AUDIT_LIMIT);
+    }
+    writeJsonFileSync(AUDIT_FILE, items);
+  } catch (err) {
+    console.log(`[crontask] audit write failed: ${String(err)}`);
+  }
 }
 
 /** Appends one history entry, keeping at most HISTORY_LIMIT entries. */
@@ -308,10 +338,12 @@ function rpcList(): { tasks: Task[]; nodes: NodeInfo[] } {
 
 /** crontask.save: create or update a task. Returns synchronously. */
 function rpcSave(input: Record<string, unknown>): { ok: boolean; task?: Task; error?: string } {
+  const operator = String((input as Record<string, unknown>)?._operator ?? "admin");
   const task = taskFromInput(input ?? {});
   const error = validateTask(task);
   if (error) return { ok: false, error };
   const tasks = loadTasksSync();
+  let action = "create";
   if (task.id === "") {
     task.id = newId();
     task.createdAt = new Date().toISOString();
@@ -319,26 +351,47 @@ function rpcSave(input: Record<string, unknown>): { ok: boolean; task?: Task; er
   } else {
     const idx = tasks.findIndex((t) => t.id === task.id);
     if (idx === -1) return { ok: false, error: "Task not found" };
+    action = "update";
     tasks[idx] = { ...task, createdAt: tasks[idx].createdAt };
   }
   persistTasksSync(tasks);
+  appendAuditSync({
+    ts: new Date().toISOString(),
+    action,
+    operator,
+    taskId: task.id,
+    taskName: task.name,
+    detail: `${action === "create" ? "创建" : "更新"}任务 "${task.name}" @ ${task.cron}，节点 ${task.nodes.length} 个`,
+  });
   return { ok: true, task };
 }
 
 /** crontask.delete -> removes a task. Returns synchronously. */
 function rpcDelete(params: unknown): { ok: boolean; error?: string } {
-  const id = String((params as Record<string, unknown>)?.id ?? "");
+  const p = (params ?? {}) as Record<string, unknown>;
+  const operator = String(p._operator ?? "admin");
+  const id = String(p.id ?? "");
   if (!id) return { ok: false, error: "Task id is required" };
   const tasks = loadTasksSync();
+  const target = tasks.find((t) => t.id === id);
+  if (!target) return { ok: false, error: "Task not found" };
   const next = tasks.filter((t) => t.id !== id);
-  if (next.length === tasks.length) return { ok: false, error: "Task not found" };
   persistTasksSync(next);
+  appendAuditSync({
+    ts: new Date().toISOString(),
+    action: "delete",
+    operator,
+    taskId: id,
+    taskName: target.name,
+    detail: `删除任务 "${target.name}"`,
+  });
   return { ok: true };
 }
 
 /** crontask.setEnabled -> enable/disable a task. Returns synchronously. */
 function rpcSetEnabled(params: unknown): { ok: boolean; error?: string } {
   const p = (params ?? {}) as Record<string, unknown>;
+  const operator = String(p._operator ?? "admin");
   const id = String(p.id ?? "");
   const enabled = asBoolean(p.enabled, true);
   const tasks = loadTasksSync();
@@ -346,18 +399,36 @@ function rpcSetEnabled(params: unknown): { ok: boolean; error?: string } {
   if (!task) return { ok: false, error: "Task not found" };
   task.enabled = enabled;
   persistTasksSync(tasks);
+  appendAuditSync({
+    ts: new Date().toISOString(),
+    action: enabled ? "enable" : "disable",
+    operator,
+    taskId: id,
+    taskName: task.name,
+    detail: `${enabled ? "启用" : "停用"}任务 "${task.name}"`,
+  });
   return { ok: true };
 }
 
 /** crontask.run -> manually trigger a task immediately (async dispatch, sync return). */
 function rpcRun(params: unknown): { ok: boolean; error?: string } {
-  const id = String((params as Record<string, unknown>)?.id ?? "");
+  const p = (params ?? {}) as Record<string, unknown>;
+  const operator = String(p._operator ?? "admin");
+  const id = String(p.id ?? "");
   const task = loadTasksSync().find((t) => t.id === id);
   if (!task) return { ok: false, error: "Task not found" };
   if (task.command === "" || task.nodes.length === 0) {
     return { ok: false, error: "Task has no command or nodes" };
   }
   void dispatchTask(task);
+  appendAuditSync({
+    ts: new Date().toISOString(),
+    action: "run",
+    operator,
+    taskId: id,
+    taskName: task.name,
+    detail: `手动触发任务 "${task.name}"`,
+  });
   return { ok: true };
 }
 
@@ -366,6 +437,13 @@ function rpcHistory(params: unknown): { history: HistoryEntry[] } {
   const limit = Math.max(1, Math.min(200, Number((params as Record<string, unknown>)?.limit ?? 50) || 50));
   const items = loadHistorySync();
   return { history: items.slice(-limit).reverse() };
+}
+
+/** crontask.audit -> recent operation log (newest first). Returns synchronously. */
+function rpcAudit(params: unknown): { audit: AuditEntry[] } {
+  const limit = Math.max(1, Math.min(500, Number((params as Record<string, unknown>)?.limit ?? 100) || 100));
+  const items = loadAuditSync();
+  return { audit: items.slice(-limit).reverse() };
 }
 
 // ---------------------------------------------------------------------------
@@ -384,6 +462,7 @@ definePlugin({
       ["crontask.setEnabled", (p) => rpcSetEnabled(p)],
       ["crontask.run", (p) => rpcRun(p)],
       ["crontask.history", (p) => rpcHistory(p)],
+      ["crontask.audit", (p) => rpcAudit(p)],
     ];
     for (const [name, handler] of rpcs) {
       try {

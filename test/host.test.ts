@@ -256,9 +256,25 @@ test("registers all management RPC methods", async () => {
   await writeTasks([]);
   await bootPlugin();
   for (const m of ["crontask.list", "crontask.save", "crontask.delete",
-                   "crontask.setEnabled", "crontask.run", "crontask.history"]) {
+                   "crontask.setEnabled", "crontask.run", "crontask.history", "crontask.audit"]) {
     assert.ok(host.rpcs.has(m), `missing ${m}`);
   }
+});
+
+test("crontask.audit logs create/delete with operator", async () => {
+  await writeTasks([]);
+  await bootPlugin();
+  await rpc("crontask.save", { ...makeTask({ id: "" }), _operator: "alice" });
+  const list = await rpc("crontask.list");
+  const id = list.tasks[0].id;
+  await rpc("crontask.delete", { id, _operator: "bob" });
+  const audit = await rpc("crontask.audit");
+  assert.equal(audit.audit.length, 2);
+  assert.equal(audit.audit[0].action, "delete");
+  assert.equal(audit.audit[0].operator, "bob");
+  assert.equal(audit.audit[1].action, "create");
+  assert.equal(audit.audit[1].operator, "alice");
+  assert.match(audit.audit[1].detail, /Alpha/);
 });
 
 test("crontask.save creates a task; list returns it", async () => {
