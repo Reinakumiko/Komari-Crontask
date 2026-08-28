@@ -1,0 +1,40 @@
+{
+  "$schema": "./node_modules/@komari-monitor/plugin-sdk/schema/komari-plugin.schema.json",
+  "name": {
+    "zh-CN": "定时任务",
+    "zh-TW": "定時任務",
+    "en": "Cron Task"
+  },
+  "short": "crontask",
+  "icon": "assets/crontask-icon.svg",
+  "komari": ">=1.4.3",
+  "description": {
+    "zh-CN": "按 cron 计划在选定节点上定时执行 shell 命令，回收每个节点的执行结果，失败时发送通知。",
+    "zh-TW": "依 cron 計畫在選定節點上定時執行 shell 指令，回收每個節點的執行結果，失敗時發送通知。",
+    "en": "Scheduled command execution. Runs shell commands on selected nodes on cron schedules, collects per-node results, and notifies on failure."
+  },
+  "version": "0.3.1",
+  "entry": "script.js",
+  "author": {
+    "zh-CN": "Komari Community",
+    "zh-TW": "Komari Community",
+    "en": "Komari Community"
+  },
+  "permissions": {
+    "allowSystemRPC": true,
+    "node": true
+  },
+  "pages": [
+    {
+      "file": "admin/index.html",
+      "title": {
+        "zh-CN": "定时任务",
+        "zh-TW": "定時任務",
+        "en": "Cron Task"
+      },
+      "icon": "assets/crontask-icon.svg",
+      "type": "iframe",
+      "visibility": "admin"
+    }
+  ]
+}
