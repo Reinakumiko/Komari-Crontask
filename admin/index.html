@@ -711,14 +711,27 @@ function humanizeCron(expr) {
   if (p.length < 5) return t;
   const tm = pad(p[1]) + ":" + pad(p[0]);
   const dom = p[2], mon = p[3], dow = p[4];
-  const ms = mon !== "*" ? String(mon).split(",") : [];
-  const mTxt = ms.length ? "，" + ms.map(Number).join("/") + " 月" : "";
-  if (dom.startsWith("*/")) return "每 " + dom.slice(2) + " 天 " + tm + mTxt;
+  const mons = mon !== "*" ? String(mon).split(",") : [];
+  // 限定月份时用「每年 X 月的 ...」表述，语义明确无歧义
+  const mTxt = mons.length ? "每年 " + mons.map(Number).join("/") + " 月的 " : "";
+  if (dom.startsWith("*/")) {
+    return mTxt ? mTxt + "每 " + dom.slice(2) + " 天 " + tm
+                : "每 " + dom.slice(2) + " 天 " + tm;
+  }
   const dows = dow !== "*" ? String(dow).split(",") : [];
   const ds = dom !== "*" ? String(dom).split(",") : [];
-  if (dows.length && dom === "*") return "每周" + dows.map(d => WEEKDAY_NAMES[Number(d)]).join("、") + " " + tm + mTxt;
-  if (ds.length) return "每月 " + ds.map(Number).join("/") + " 号 " + tm + mTxt;
-  if (p[1] !== "*") return "每天 " + tm + mTxt;
+  if (dows.length && (dom === "*" || dom === "?")) {
+    const weekTxt = "每周" + dows.map(d => WEEKDAY_NAMES[Number(d)]).join("、") + " " + tm;
+    return mTxt ? mTxt + weekTxt : weekTxt;
+  }
+  if (ds.length) {
+    const monthTxt = "每月 " + ds.map(Number).join("/") + " 号 " + tm;
+    return mTxt ? mTxt + ds.map(Number).join("/") + " 号 " + tm : monthTxt;
+  }
+  if (p[1] !== "*") {
+    const dayTxt = "每天 " + tm;
+    return mTxt ? mTxt + dayTxt : dayTxt;
+  }
   return t;
 }
 function updateCronPreview() {
