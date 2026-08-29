@@ -399,7 +399,7 @@
               </div>
               <div class="cron-right">
                 <div class="cron-freq">
-                  <button type="button" data-freq="interval" class="active">每 N 单位</button>
+                  <button type="button" data-freq="interval" class="active">间隔</button>
                   <button type="button" data-freq="week">周</button>
                   <button type="button" data-freq="date">日期</button>
                   <button type="button" data-freq="month">月份</button>
@@ -449,8 +449,7 @@
                         <button type="button" data-u="d" class="active">天</button>
                       </div>
                     </div>
-                    <div class="cron-presets" id="presetBtnRow"></div>
-                    <span class="tip" id="intervalTip">单位为「天」时按日历每 N 天执行（需指定时刻）；为「分钟/小时」时按相对间隔反复执行</span>
+                    <span class="tip" id="intervalTip">「天」按日历每 N 天执行（N=1 即每天）；「分钟/小时」为相对间隔 @every</span>
                   </div>
                   <!-- 月份：独立标签，可选限定在哪些月份执行（叠加于其他主频率） -->
                   <div class="row" data-cfg="month">
@@ -730,36 +729,9 @@ function freqToCron() {
   }
   return "0 3 * * *";
 }
-/** 间隔单位联动：切换 seg 高亮、电子钟显隐（天=日历需时刻；分/时=相对间隔无需时刻）、预设随单位变化 */
-const UNIT_PRESETS = {
-  m: [[5, "m"], [15, "m"], [30, "m"], [45, "m"]],
-  h: [[1, "h"], [2, "h"], [6, "h"], [12, "h"], [24, "h"]],
-  d: [[1, "d"], [2, "d"], [3, "d"], [7, "d"], [14, "d"], [30, "d"]],
-};
-function renderUnitPresets() {
-  const row = $("presetBtnRow");
-  const u = currentUnit();
-  row.innerHTML = (UNIT_PRESETS[u] || []).map(([n, uu]) =>
-    `<button type="button" data-n="${n}" data-u="${uu}">${n} ${uu === "m" ? "分钟" : uu === "h" ? "小时" : uu === "d" && n === 1 ? "天(每天)" : "天"}</button>`
-  ).join("");
-  row.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
-    $("cronEveryN").value = b.dataset.n;
-    document.querySelectorAll("#unitSeg button").forEach(x => x.classList.toggle("active", x.dataset.u === b.dataset.u));
-    syncUnitUI();
-    updateCronPreview();
-  }));
-}
-function syncUnitUI() {
-  const u = currentUnit();
-  $("cronTimeBox").style.display = u === "d" ? "" : "none"; // 只有"天"需要时刻
-  $("intervalTip").textContent = u === "d"
-    ? "按日历每 N 天执行（N=1 即每天，需指定时刻）"
-    : `每 N ${u === "m" ? "分钟" : "小时"}相对间隔反复执行（无需时刻，自插件启动起计时）`;
-}
+/** 间隔单位联动：切换 seg 高亮；时钟始终显示（仅作展示，@every 表达式不使用时刻） */
 function setUnit(u) {
   document.querySelectorAll("#unitSeg button").forEach(b => b.classList.toggle("active", b.dataset.u === u));
-  renderUnitPresets();
-  syncUnitUI();
   updateCronPreview();
 }
 
@@ -843,7 +815,7 @@ function cronToFreq(expr) {
       setMultiselect("#cronDates", String(dom).split(","));
       selectMainFreq("date");
     } else {
-      // 纯 "分 时 * * *" = 每天 → 归入"每 N 单位"的 天=1
+      // 纯 "分 时 * * *" = 每天 → 归入"间隔"的 天=1
       setUnit("d");
       selectMainFreq("interval");
     }
@@ -930,7 +902,6 @@ document.querySelectorAll(".stepper").forEach(sp => {
 // 单位分段按钮联动
 document.querySelectorAll("#unitSeg button").forEach(b => b.addEventListener("click", () => setUnit(b.dataset.u)));
 setUnit("d"); // 初始单位：天（默认每天）
-renderUnitPresets();
 updateCronPreview();
 
 // ---------- 节点选择器 ----------
