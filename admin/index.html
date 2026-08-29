@@ -162,28 +162,38 @@
   textarea.term::placeholder { color: #475569; }
   textarea.term:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
 
-  /* ---------- cron 可视化选择器 ---------- */
+  /* ---------- cron 可视化选择器（左时间 / 右频率+参数） ---------- */
   .cron-wizard { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
-  .cron-wizard:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
-  .cron-freq { display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 12px; border-bottom: 1px solid #f1f5f9; }
-  .cron-freq button { font-size: 12.5px; padding: 5px 14px; border-radius: 999px;
+  .cron-main { display: flex; min-height: 200px; }
+  .cron-time { width: 150px; flex: none; border-right: 1px solid #f1f5f9; background: #f8fafc;
+               display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+               padding: 16px 10px; gap: 6px; }
+  .cron-time .cap { color: var(--faint); font-size: 11.5px; }
+  .cron-time input[type=time] { font-family: var(--mono); font-size: 16px;
+    border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; width: 118px;
+    background: #fff; text-align: center; }
+  .cron-time input[type=time]:focus { outline: none; border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  .cron-right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  .cron-freq { display: flex; gap: 2px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+  .cron-freq button { font-size: 12px; padding: 4px 12px; border-radius: 999px;
     background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
   .cron-freq button:hover { background: var(--primary-soft); color: var(--primary-deep); border-color: #bae6fd; filter: none; }
   .cron-freq button.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
-  .cron-config { padding: 12px 14px; min-height: 84px; }
-  .cron-config .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .cron-config { padding: 12px 14px; flex: 1; display: flex; align-items: center; }
+  .cron-config .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; }
   .cron-config .pick-time { display: flex; align-items: center; gap: 6px; }
-  .cron-config .pick-time input[type=time] { font-family: var(--mono); font-size: 14px;
-    padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; width: 130px; }
-  .cron-config .pick-time input[type=time]:focus { outline: none; border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
   .cron-config .pick-time .lbl { color: var(--faint); font-size: 12px; }
-  .cron-weekdays { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
-  .cron-weekdays button { width: 34px; height: 34px; border-radius: 8px; font-size: 12.5px;
+  .cron-config .num { width: 72px; }
+  .cron-config .num-unit { display: flex; align-items: center; gap: 6px; }
+  .cron-config .num-unit .lbl { color: var(--faint); font-size: 12px; }
+  .cron-multiselect { display: flex; gap: 5px; flex-wrap: wrap; }
+  .cron-multiselect button { width: 33px; height: 33px; border-radius: 8px; font-size: 12px;
     background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); padding: 0; }
-  .cron-weekdays button.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
-  .cron-mday { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .cron-multiselect button.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  .cron-multiselect button.month { width: auto; padding: 0 8px; }
   .cron-mday select { font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; }
+  .cron-note { color: var(--faint); font-size: 11.5px; }
   .cron-custom-input { width: 100%; font-family: var(--mono); font-size: 13px;
     padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px; }
   .cron-custom-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
@@ -192,6 +202,13 @@
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .cron-preview .cap { color: var(--faint); font-size: 11px; }
   .cron-preview .human { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  /* 行式控件（opt-row 右侧带输入框的变体） */
+  .opt-input { display: flex; align-items: center; gap: 6px; flex: none; }
+  .opt-input input { width: 90px; text-align: right; font-size: 13.5px; padding: 6px 10px;
+    border: 1px solid var(--border); border-radius: 8px; font-family: var(--mono); }
+  .opt-input input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  .opt-input .unit { color: var(--muted); font-size: 12.5px; }
 
   /* ---------- 开关行（title/desc 分行） ---------- */
   .opt-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px;
@@ -307,44 +324,72 @@
         <div class="field">
           <label>执行周期</label>
           <div class="cron-wizard">
-            <div class="cron-freq">
-              <button type="button" data-freq="daily" class="active">每天</button>
-              <button type="button" data-freq="weekly">每周</button>
-              <button type="button" data-freq="monthly">每月</button>
-              <button type="button" data-freq="interval">固定间隔</button>
-              <button type="button" data-freq="custom">自定义</button>
-            </div>
-            <div class="cron-config">
-              <div class="row" data-cfg="daily">
-                <span class="pick-time"><span class="lbl">时间</span><input type="time" id="cronTime" value="03:00"></span>
-                <span class="muted">每天在选定时间执行</span>
+            <div class="cron-main">
+              <div class="cron-time">
+                <span class="cap">什么时候执行</span>
+                <input type="time" id="cronTime" value="03:00">
               </div>
-              <div class="row" data-cfg="weekly" style="display:none">
-                <span class="pick-time"><span class="lbl">时间</span><input type="time" id="cronTimeW" value="03:00"></span>
-                <div class="cron-weekdays" id="cronWeekdays">
-                  <button type="button" data-dow="1" class="on">一</button>
-                  <button type="button" data-dow="2">二</button>
-                  <button type="button" data-dow="3">三</button>
-                  <button type="button" data-dow="4">四</button>
-                  <button type="button" data-dow="5">五</button>
-                  <button type="button" data-dow="6">六</button>
-                  <button type="button" data-dow="0">日</button>
+              <div class="cron-right">
+                <div class="cron-freq">
+                  <button type="button" data-freq="daily" class="active">每天</button>
+                  <button type="button" data-freq="everyndays">每 N 天</button>
+                  <button type="button" data-freq="weekly">每周几</button>
+                  <button type="button" data-freq="monthly">每月几号</button>
+                  <button type="button" data-freq="months">每年某月</button>
+                  <button type="button" data-freq="interval">固定间隔</button>
+                  <button type="button" data-freq="custom">自定义</button>
                 </div>
-              </div>
-              <div class="row" data-cfg="monthly" style="display:none">
-                <span class="pick-time"><span class="lbl">时间</span><input type="time" id="cronTimeM" value="03:00"></span>
-                <span class="cron-mday"><span class="lbl">每月</span><select id="cronMday"></select><span class="lbl">号</span></span>
-              </div>
-              <div class="row" data-cfg="interval" style="display:none">
-                <span class="pick-time"><span class="lbl">每</span><input type="number" id="cronEveryN" value="5" min="1" style="width:70px">
-                <select id="cronEveryUnit">
-                  <option value="m">分钟</option>
-                  <option value="h">小时</option>
-                  <option value="d">天</option>
-                </select></span>
-              </div>
-              <div class="row" data-cfg="custom" style="display:none">
-                <input type="text" id="cronCustom" class="cron-custom-input" placeholder="0 3 * * *">
+                <div class="cron-config">
+                  <div class="row" data-cfg="daily">
+                    <span class="muted">每天在左侧选定的时间执行</span>
+                  </div>
+                  <div class="row" data-cfg="everyndays" style="display:none">
+                    <span class="num-unit"><span class="lbl">每</span><input type="number" id="cronEveryDays" class="num" value="2" min="1" max="30"><span class="lbl">天</span></span>
+                  </div>
+                  <div class="row" data-cfg="weekly" style="display:none">
+                    <span class="cron-multiselect" id="cronWeekdays">
+                      <button type="button" data-v="1" class="on">一</button>
+                      <button type="button" data-v="2">二</button>
+                      <button type="button" data-v="3">三</button>
+                      <button type="button" data-v="4">四</button>
+                      <button type="button" data-v="5">五</button>
+                      <button type="button" data-v="6">六</button>
+                      <button type="button" data-v="0">日</button>
+                    </span>
+                    <span class="muted">（可多选）</span>
+                  </div>
+                  <div class="row" data-cfg="monthly" style="display:none">
+                    <span class="cron-mday"><span class="lbl">每月</span><select id="cronMday"></select><span class="lbl">号</span></span>
+                  </div>
+                  <div class="row" data-cfg="months" style="display:none">
+                    <span class="cron-multiselect" id="cronMonths">
+                      <button type="button" data-v="1" class="on">1月</button>
+                      <button type="button" data-v="2">2月</button>
+                      <button type="button" data-v="3">3月</button>
+                      <button type="button" data-v="4">4月</button>
+                      <button type="button" data-v="5">5月</button>
+                      <button type="button" data-v="6">6月</button>
+                      <button type="button" data-v="7">7月</button>
+                      <button type="button" data-v="8">8月</button>
+                      <button type="button" data-v="9">9月</button>
+                      <button type="button" data-v="10">10月</button>
+                      <button type="button" data-v="11">11月</button>
+                      <button type="button" data-v="12">12月</button>
+                    </span>
+                    <span class="cron-mday"><span class="lbl">的</span><select id="cronMMday"></select><span class="lbl">号</span></span>
+                  </div>
+                  <div class="row" data-cfg="interval" style="display:none">
+                    <span class="num-unit"><span class="lbl">每</span><input type="number" id="cronEveryN" value="5" min="1" class="num">
+                    <select id="cronEveryUnit">
+                      <option value="m">分钟</option>
+                      <option value="h">小时</option>
+                      <option value="d">天</option>
+                    </select></span>
+                  </div>
+                  <div class="row" data-cfg="custom" style="display:none">
+                    <input type="text" id="cronCustom" class="cron-custom-input" placeholder="0 3 * * *（分 时 日 月 周）">
+                  </div>
+                </div>
               </div>
             </div>
             <div class="cron-preview"><span class="cap">表达式</span><span id="cronPreviewText">0 3 * * *</span>
@@ -375,9 +420,13 @@
       <div class="section">
         <h3>执行设置</h3>
         <div class="field">
-          <label for="f_timeout">等待结果超时（秒）</label>
-          <input type="number" id="f_timeout" value="300" min="1" max="3600">
-          <div class="hint">超过此时长仍未收到节点结果的，按超时部分结果结算</div>
+          <label class="opt-row">
+            <span class="opt-text">
+              <span class="opt-title">等待结果超时</span>
+              <span class="opt-desc">超出此时长仍未收到节点结果的，按超时部分结果结算</span>
+            </span>
+            <span class="opt-input"><input type="number" id="f_timeout" value="300" min="1" max="3600"><span class="unit">秒</span></span>
+          </label>
         </div>
         <div class="field">
           <label class="opt-row">
@@ -499,14 +548,13 @@ async function refreshTasks() {
   } catch (e) { showError("加载任务失败: " + e.message); }
 }
 
-// ---------- cron 可视化选择器 ----------
+// ---------- cron 可视化选择器（先时间、后频率） ----------
 const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
 function pad(n) { return String(n).padStart(2, "0"); }
-// time input 是 "时:分"，cron 是 "分 时"，转换时交换字段
+// time input 是 "时:分"，cron 是 "分 时"
 function timeToCron(v) { const p = String(v || "00:00").split(":"); return p[1] + " " + p[0]; }
 function fmtTime(expr) {
-  // cron "分 时" -> time input "时:分"
-  const p = expr.split(/\s+/);
+  const p = String(expr).trim().split(/\s+/);
   if (p.length >= 2 && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1])) return pad(p[1]) + ":" + pad(p[0]);
   return "00:00";
 }
@@ -517,17 +565,24 @@ function setFreq(freq) {
   document.querySelectorAll(".cron-freq button").forEach(b => b.classList.toggle("active", b.dataset.freq === freq));
   document.querySelectorAll(".cron-config .row").forEach(r => { r.style.display = r.dataset.cfg === freq ? "" : "none"; });
 }
+function multiselectVals(sel) {
+  return [...document.querySelectorAll(sel + " button.on")].map(b => b.dataset.v);
+}
 function freqToCron() {
   const freq = currentFreq();
+  const t = timeToCron($("cronTime").value);
   switch (freq) {
-    case "daily": return timeToCron($("cronTime").value) + " * * *";
+    case "daily": return t + " * * *";
+    case "everyndays": return t + " */" + (Number($("cronEveryDays").value || 2)) + " * *";
     case "weekly": {
-      const t = timeToCron($("cronTimeW").value);
-      const dows = [...document.querySelectorAll("#cronWeekdays button.on")].map(b => b.dataset.dow);
-      const w = dows.length ? dows.join(",") : "0";
-      return `${t} * * ${w}`;
+      const dows = multiselectVals("#cronWeekdays");
+      return t + " * * " + (dows.length ? dows.join(",") : "0");
     }
-    case "monthly": return timeToCron($("cronTimeM").value) + " " + $("cronMday").value + " * *";
+    case "monthly": return t + " " + $("cronMday").value + " * *";
+    case "months": {
+      const ms = multiselectVals("#cronMonths");
+      return t + " " + $("cronMMday").value + " " + (ms.length ? ms.join(",") : "*") + " *";
+    }
     case "interval": return "@every " + Number($("cronEveryN").value || 5) + $("cronEveryUnit").value;
     case "custom": return $("cronCustom").value.trim() || "0 3 * * *";
   }
@@ -538,12 +593,17 @@ function humanizeCron(expr) {
   if (/^@every\s+/i.test(t)) return "每 " + t.replace(/^@every\s+/i, "");
   const p = t.split(/\s+/);
   if (p.length < 5) return t;
-  const tm = pad(p[0]) + ":" + pad(p[1]);
-  if (p[4] !== "*") {
-    const dows = String(p[4]).split(",").map(d => WEEKDAY_NAMES[Number(d)]).join("、");
-    return "每周" + dows + " " + tm;
+  // cron 是 "分 时"，人类阅读是 "时:分"
+  const tm = pad(p[1]) + ":" + pad(p[0]);
+  const dom = p[2], mon = p[3], dow = p[4];
+  if (dom.startsWith("*/")) return "每 " + dom.slice(2) + " 天（" + tm + "）";
+  if (mon !== "*" && dom !== "*") {
+    return "每年 " + String(mon).split(",").join("、") + " 月 " + dom + " 号 " + tm;
   }
-  if (p[2] !== "*") return "每月 " + p[2] + " 号 " + tm;
+  if (dow !== "*" && dom === "*") {
+    return "每周" + String(dow).split(",").map(d => WEEKDAY_NAMES[Number(d)]).join("、") + " " + tm;
+  }
+  if (dom !== "*") return "每月 " + dom + " 号 " + tm;
   if (p[1] !== "*") return "每天 " + tm;
   return t;
 }
@@ -562,13 +622,19 @@ function cronToFreq(expr) {
   }
   const p = t.split(/\s+/);
   if (p.length >= 5) {
-    if (p[4] !== "*" && p[2] === "*") {
-      $("cronTimeW").value = fmtTime(t);
-      document.querySelectorAll("#cronWeekdays button").forEach(b => b.classList.toggle("on", String(p[4]).split(",").includes(b.dataset.dow)));
+    const dom = p[2], mon = p[3], dow = p[4];
+    if (dom.startsWith("*/")) {
+      $("cronEveryDays").value = dom.slice(2);
+      setFreq("everyndays");
+    } else if (mon !== "*" && dom !== "*") {
+      document.querySelectorAll("#cronMonths button").forEach(b => b.classList.toggle("on", String(mon).split(",").includes(b.dataset.v)));
+      $("cronMMday").value = dom;
+      setFreq("months");
+    } else if (dow !== "*" && dom === "*") {
+      document.querySelectorAll("#cronWeekdays button").forEach(b => b.classList.toggle("on", String(dow).split(",").includes(b.dataset.v)));
       setFreq("weekly");
-    } else if (p[2] !== "*") {
-      $("cronTimeM").value = fmtTime(t);
-      $("cronMday").value = p[2];
+    } else if (dom !== "*") {
+      $("cronMday").value = dom;
       setFreq("monthly");
     } else {
       $("cronTime").value = fmtTime(t);
@@ -581,18 +647,22 @@ function cronToFreq(expr) {
 }
 function buildCronExpr() { return freqToCron(); }
 
-// 初始化每月日期下拉
-for (let i = 1; i <= 31; i++) {
+// 初始化日期下拉（每月几号 / 某月几号共用范围 1-28，避免月末缺失）
+for (let i = 1; i <= 28; i++) {
   const o = document.createElement("option");
   o.value = String(i); o.textContent = String(i);
   $("cronMday").appendChild(o);
+  $("cronMMday").appendChild(o.cloneNode());
 }
 $("cronMday").value = "1";
+$("cronMMday").value = "1";
 
+// 交互绑定
 document.querySelectorAll(".cron-freq button").forEach(b => b.addEventListener("click", () => { setFreq(b.dataset.freq); updateCronPreview(); }));
-["cronTime", "cronTimeW", "cronTimeM", "cronEveryN", "cronEveryUnit", "cronCustom"].forEach(id => $(id).addEventListener("input", updateCronPreview));
-document.querySelectorAll("#cronWeekdays button").forEach(b => b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); }));
+["cronTime", "cronEveryDays", "cronEveryN", "cronEveryUnit", "cronCustom"].forEach(id => $(id).addEventListener("input", updateCronPreview));
+document.querySelectorAll(".cron-multiselect button").forEach(b => b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); }));
 $("cronMday").addEventListener("change", updateCronPreview);
+$("cronMMday").addEventListener("change", updateCronPreview);
 
 // ---------- 节点选择器 ----------
 function renderNodeList() {
