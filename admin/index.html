@@ -367,6 +367,7 @@
                   <button type="button" data-freq="day" class="active">天</button>
                   <button type="button" data-freq="week">周</button>
                   <button type="button" data-freq="date">日期</button>
+                  <button type="button" data-freq="month">月份</button>
                   <button type="button" data-freq="interval">间隔</button>
                   <button type="button" data-freq="custom">自定义</button>
                 </div>
@@ -421,13 +422,17 @@
                   <div class="row" data-cfg="custom">
                     <input type="text" id="cronCustom" class="cron-custom-input" placeholder="0 3 * * *（分 时 日 月 周）">
                   </div>
-                  <!-- 月份叠加层：对所有主频率生效，不影响天/周/日期选择 -->
-                  <div class="months-overlay" id="monthOverlay">
-                    <div class="freq-toolbar" style="margin-bottom:2px">
-                      <label class="month-toggle"><input type="checkbox" id="monthAll" checked> 全年</label>
-                      <span class="hint" style="color:var(--faint);font-size:11px">取消勾选后限定在指定月份执行</span>
+                  <!-- 月份：独立标签，可选限定在哪些月份执行（叠加于其他主频率） -->
+                  <div class="row" data-cfg="month">
+                    <div class="freq-toolbar">
+                      <span class="lbl">限定执行的月份</span>
+                      <span class="qbtn" id="monthQbtn">
+                        <button type="button" data-quick="all">全选</button>
+                        <button type="button" data-quick="none">清空</button>
+                      </span>
                     </div>
-                    <div class="freq-grid cols6" id="cronMonths" style="margin-top:6px"></div>
+                    <div class="freq-grid cols6" id="cronMonths"></div>
+                    <span class="tip">选中月份标签后，配合「天/周/日期」组合：如每周一、五 且 仅 1、9 月执行</span>
                   </div>
                 </div>
               </div>
@@ -648,12 +653,30 @@ function currentFreq() {
   return document.querySelector(".cron-freq button.active")?.dataset.freq || "day";
 }
 function setFreq(freq) {
-  document.querySelectorAll(".cron-freq button").forEach(b => b.classList.toggle("active", b.dataset.freq === freq));
-  document.querySelectorAll(".cron-config .row").forEach(r => r.classList.toggle("active", r.dataset.cfg === freq));
+  if (freq === "month") {
+    // 月份是 toggle：再点一次回到"全年"（即不限月份）
+    const btn = document.querySelector('.cron-freq button[data-freq="month"]');
+    const activating = !btn.classList.contains("active");
+    btn.classList.toggle("active", activating);
+    document.querySelector('[data-cfg="month"]').classList.toggle("active", activating);
+    updateCronPreview();
+    return;
+  }
+  // 主频率单选：月份按钮不参与（保持独立叠加态）
+  document.querySelectorAll(".cron-freq button").forEach(b => {
+    if (b.dataset.freq === "month") return;
+    b.classList.toggle("active", b.dataset.freq === freq);
+  });
+  // 主频率行切换；月份行保持自身激活态
+  document.querySelectorAll(".cron-config .row").forEach(r => {
+    if (r.dataset.cfg === "month") return;
+    r.classList.toggle("active", r.dataset.cfg === freq);
+  });
 }
 function multiselectVals(sel) { return [...document.querySelectorAll(sel + " button.on")].map(b => b.dataset.v).filter(Boolean); }
 function monthEmit() {
-  if ($("monthAll").checked) return "*";
+  const btn = document.querySelector('.cron-freq button[data-freq="month"]');
+  if (!btn.classList.contains("active")) return "*"; // 未限定 = 全年
   const ms = multiselectVals("#cronMonths");
   return ms.length ? ms.join(",") : "*";
 }
@@ -718,18 +741,24 @@ function cronToFreq(expr) {
   if (p.length >= 5) {
     const dom = p[2], mon = p[3], dow = p[4];
     clockFromStr(fmtTime(t));
-    // 月份叠加
-    if (mon !== "*" && mon !== "1") {
-      $("monthAll").checked = false;
+    // 月份：独立激活态，与主频率组合
+    if (mon !== "*" && mon.trim() !== "") {
+      document.querySelector('.cron-freq button[data-freq="month"]').classList.add("active");
+      document.querySelector('[data-cfg="month"]').classList.add("active");
       setMultiselect("#cronMonths", String(mon).split(","));
-    } else { $("monthAll").checked = true; }
+    } else {
+      document.querySelector('.cron-freq button[data-freq="month"]').classList.remove("active");
+      document.querySelector('[data-cfg="month"]').classList.remove("active");
+    }
+    // 日期字段是纯数字列表(含单值"1") → 日期标签；否则按天/周处理
+    const domNumeric = dom !== "*" && dom !== "?" && !dom.includes("/") && /^[0-9,]+$/.test(dom);
     if (dom.startsWith("*/")) {
       $("cronEveryDays").value = dom.slice(2);
       setFreq("day");
-    } else if (dow !== "*" && (dom === "*" || dom === "?")) {
+    } else if (dow !== "*" && !domNumeric) {
       setMultiselect("#cronWeekdays", String(dow).split(","));
       setFreq("week");
-    } else if (dom !== "*" && dom !== "1") {
+    } else if (domNumeric) {
       setMultiselect("#cronDates", String(dom).split(","));
       setFreq("date");
     } else {
@@ -759,9 +788,17 @@ function buildCronExpr() { return freqToCron(); }
     b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); });
     months.appendChild(b);
   }
+  // 月份 全选/清空
+  document.querySelector("#monthQbtn [data-quick=all]").addEventListener("click", () => {
+    document.querySelectorAll("#cronMonths button").forEach(b => b.classList.add("on")); updateCronPreview();
+  });
+  document.querySelector("#monthQbtn [data-quick=none]").addEventListener("click", () => {
+    document.querySelectorAll("#cronMonths button").forEach(b => b.classList.remove("on")); updateCronPreview();
+  });
 })();
 // 行内 .qbtn 工具栏（周/日期的全选/清空）
 document.querySelectorAll(".qbtn").forEach(toolbar => {
+  if (toolbar.id === "monthQbtn") return; // 月份全选/清空已单独绑定
   const grid = toolbar.closest(".row").querySelector(".freq-grid");
   if (!grid) return;
   const allB = toolbar.querySelector('[data-quick="all"]');
@@ -775,9 +812,17 @@ document.querySelectorAll(".cron-freq button").forEach(b => b.addEventListener("
 $("cronEveryDays").addEventListener("input", updateCronPreview);
 $("cronEveryN").addEventListener("input", updateCronPreview);
 $("cronEveryUnit").addEventListener("change", updateCronPreview);
-$("cronCustom").addEventListener("input", updateCronPreview);
+$("cronCustom").addEventListener("input", () => {
+  // 尝试解析 5 字段 cron 前两位(分 时)同步电子钟
+  const txt = $("cronCustom").value.trim();
+  const p = txt.split(/\s+/);
+  if (p.length >= 5 && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1])) {
+    clockFromStr(fmtTime(txt));
+  }
+  updateCronPreview();
+});
 $("cronWeekdays").addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if (b) { b.classList.toggle("on"); updateCronPreview(); } });
-$("monthAll").addEventListener("change", updateCronPreview);
+// 月份网格点击已通过 cronMonths 的独立事件处理
 
 // 初始预览
 updateCronPreview();
