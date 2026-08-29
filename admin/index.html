@@ -239,6 +239,17 @@
   .stepper input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
   .stepper input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 
+  /* 单位分段按钮（替代原生下拉） */
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: #fff; }
+  .seg button { padding: 0 14px; height: 32px; font-size: 13px; background: #fff; color: var(--muted); border: 0; border-right: 1px solid var(--border); border-radius: 0; }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { background: var(--primary-soft); color: var(--primary-deep); filter: none; }
+  .seg button.active { background: var(--primary); color: #fff; font-weight: 600; }
+
+  /* 间隔联动整体：每 [stepper] [单位] */
+  .interval-group { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .interval-group .lbl { color: var(--muted); font-size: 13px; }
+
   /* cron 表达式输入框（底部，与自定义同步） */
   .expr-input { flex: 1; min-width: 220px; font-family: var(--mono); font-size: 13px;
                 padding: 6px 10px; border: 1px solid transparent; border-radius: 7px; color: var(--primary-deep);
@@ -376,7 +387,7 @@
           <label>执行周期</label>
           <div class="cron-wizard">
             <div class="cron-main">
-              <div class="cron-time">
+              <div class="cron-time" id="cronTimeBox">
                 <span class="cap">什么时候执行</span>
                 <div class="digiclock" id="digiclock" title="点击时段，滚轮 / 上下键调整，也可直接输入数字">
                   <input type="text" class="seg" id="clkH" value="03" inputmode="numeric" maxlength="2" aria-label="小时">
@@ -388,33 +399,12 @@
               </div>
               <div class="cron-right">
                 <div class="cron-freq">
-                  <button type="button" data-freq="day" class="active">天</button>
+                  <button type="button" data-freq="interval" class="active">每 N 单位</button>
                   <button type="button" data-freq="week">周</button>
                   <button type="button" data-freq="date">日期</button>
                   <button type="button" data-freq="month">月份</button>
-                  <button type="button" data-freq="interval">间隔</button>
                 </div>
                 <div class="cron-config">
-                  <div class="row active" data-cfg="day">
-                    <div class="num-unit">
-                      <span class="lbl">每</span>
-                      <div class="stepper">
-                        <button type="button" class="st-dec" data-target="cronEveryDays">−</button>
-                        <input type="number" id="cronEveryDays" value="1" min="1" max="30">
-                        <button type="button" class="st-inc" data-target="cronEveryDays">＋</button>
-                      </div>
-                      <span class="lbl">天</span>
-                    </div>
-                    <div class="cron-presets">
-                      <button type="button" data-n="1">每天</button>
-                      <button type="button" data-n="2">每 2 天</button>
-                      <button type="button" data-n="3">每 3 天</button>
-                      <button type="button" data-n="7">每周</button>
-                      <button type="button" data-n="14">每 2 周</button>
-                      <button type="button" data-n="30">每月</button>
-                    </div>
-                    <span class="tip">N = 1 即每天；可在上方直接输入或点 +/- 调整</span>
-                  </div>
                   <div class="row" data-cfg="week">
                     <div class="freq-toolbar">
                       <span class="lbl">每周几执行</span>
@@ -445,28 +435,22 @@
                     <div class="freq-grid cols7" id="cronDates"></div>
                     <span class="tip">多选 = 每月这些日期各执行一次（1~31 号）</span>
                   </div>
-                  <div class="row" data-cfg="interval">
-                    <div class="num-unit">
+                  <div class="row active" data-cfg="interval">
+                    <div class="interval-group">
                       <span class="lbl">每</span>
                       <div class="stepper">
-                        <button type="button" class="st-dec" data-target="cronEveryN">−</button>
-                        <input type="number" id="cronEveryN" value="5" min="1" max="525600">
-                        <button type="button" class="st-inc" data-target="cronEveryN">＋</button>
+                        <button type="button" class="st-dec">−</button>
+                        <input type="number" id="cronEveryN" value="1" min="1" max="525600">
+                        <button type="button" class="st-inc">＋</button>
                       </div>
-                      <select id="cronEveryUnit">
-                        <option value="m">分钟</option>
-                        <option value="h">小时</option>
-                        <option value="d">天</option>
-                      </select>
+                      <div class="seg" id="unitSeg">
+                        <button type="button" data-u="m">分钟</button>
+                        <button type="button" data-u="h">小时</button>
+                        <button type="button" data-u="d" class="active">天</button>
+                      </div>
                     </div>
-                    <div class="cron-presets">
-                      <button type="button" data-n="5" data-u="m">5 分钟</button>
-                      <button type="button" data-n="15" data-u="m">15 分钟</button>
-                      <button type="button" data-n="30" data-u="m">30 分钟</button>
-                      <button type="button" data-n="1" data-u="h">1 小时</button>
-                      <button type="button" data-n="6" data-u="h">6 小时</button>
-                      <button type="button" data-n="1" data-u="d">每天</button>
-                    </div>
+                    <div class="cron-presets" id="presetBtnRow"></div>
+                    <span class="tip" id="intervalTip">单位为「天」时按日历每 N 天执行（需指定时刻）；为「分钟/小时」时按相对间隔反复执行</span>
                   </div>
                   <!-- 月份：独立标签，可选限定在哪些月份执行（叠加于其他主频率） -->
                   <div class="row" data-cfg="month">
@@ -697,7 +681,7 @@ $("clkNow").addEventListener("click", () => {
 });
 
 // 主频率：最后点击的天/周/日期/间隔/自定义；月份的切换只影响"当前查看哪个配置"
-let mainFreq = "day";
+let mainFreq = "interval";
 function currentFreq() {
   return mainFreq;
 }
@@ -717,14 +701,23 @@ function monthEmit() {
   const ms = multiselectVals("#cronMonths");
   return ms.length ? ms.join(",") : "*";
 }
+function currentUnit() {
+  return document.querySelector("#unitSeg button.active")?.dataset.u || "d";
+}
 function freqToCron() {
   const freq = mainFreq;
   const t = timeToCron(clockValue());
   const mon = monthEmit();
+  const n = Number($("cronEveryN").value || 1);
+  const u = currentUnit();
   switch (freq) {
-    case "day": {
-      const n = Number($("cronEveryDays").value || 1);
-      return t + (n > 1 ? " */" + n : " *") + " " + mon + " *";
+    case "interval": {
+      if (u === "d") {
+        // 日历语义：每 N 天（N>=1），需时刻
+        return t + (n > 1 ? " */" + n : " *") + " " + mon + " *";
+      }
+      // 相对间隔：@every Nm / Nh（单位 m=分钟 h=小时）
+      return "@every " + n + u;
     }
     case "week": {
       const dows = multiselectVals("#cronWeekdays");
@@ -734,9 +727,40 @@ function freqToCron() {
       const ds = multiselectVals("#cronDates");
       return t + " " + (ds.length ? ds.join(",") : "*") + " " + mon + " *";
     }
-    case "interval": return "@every " + Number($("cronEveryN").value || 5) + $("cronEveryUnit").value;
   }
   return "0 3 * * *";
+}
+/** 间隔单位联动：切换 seg 高亮、电子钟显隐（天=日历需时刻；分/时=相对间隔无需时刻）、预设随单位变化 */
+const UNIT_PRESETS = {
+  m: [[5, "m"], [15, "m"], [30, "m"], [45, "m"]],
+  h: [[1, "h"], [2, "h"], [6, "h"], [12, "h"], [24, "h"]],
+  d: [[1, "d"], [2, "d"], [3, "d"], [7, "d"], [14, "d"], [30, "d"]],
+};
+function renderUnitPresets() {
+  const row = $("presetBtnRow");
+  const u = currentUnit();
+  row.innerHTML = (UNIT_PRESETS[u] || []).map(([n, uu]) =>
+    `<button type="button" data-n="${n}" data-u="${uu}">${n} ${uu === "m" ? "分钟" : uu === "h" ? "小时" : uu === "d" && n === 1 ? "天(每天)" : "天"}</button>`
+  ).join("");
+  row.querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
+    $("cronEveryN").value = b.dataset.n;
+    document.querySelectorAll("#unitSeg button").forEach(x => x.classList.toggle("active", x.dataset.u === b.dataset.u));
+    syncUnitUI();
+    updateCronPreview();
+  }));
+}
+function syncUnitUI() {
+  const u = currentUnit();
+  $("cronTimeBox").style.display = u === "d" ? "" : "none"; // 只有"天"需要时刻
+  $("intervalTip").textContent = u === "d"
+    ? "按日历每 N 天执行（N=1 即每天，需指定时刻）"
+    : `每 N ${u === "m" ? "分钟" : "小时"}相对间隔反复执行（无需时刻，自插件启动起计时）`;
+}
+function setUnit(u) {
+  document.querySelectorAll("#unitSeg button").forEach(b => b.classList.toggle("active", b.dataset.u === u));
+  renderUnitPresets();
+  syncUnitUI();
+  updateCronPreview();
 }
 
 function humanizeCron(expr) {
@@ -749,6 +773,13 @@ function humanizeCron(expr) {
   const mons = mon !== "*" ? String(mon).split(",") : [];
   // 限定月份时用「每年 X 月的 ...」表述，语义明确无歧义
   const mTxt = mons.length ? "每年 " + mons.map(Number).join("/") + " 月的 " : "";
+  if (/^@every\s+/i.test(t)) {
+    const m = t.replace(/^@every\s+/i, "").match(/^(\d+)([mhd])$/i);
+    if (m) {
+      const u = { m: "分钟", h: "小时", d: "天" }[m[2].toLowerCase()] || m[2];
+      return "每 " + m[1] + " " + u;
+    }
+  }
   if (dom.startsWith("*/")) {
     return mTxt ? mTxt + "每 " + dom.slice(2) + " 天 " + tm
                 : "每 " + dom.slice(2) + " 天 " + tm;
@@ -782,7 +813,7 @@ function cronToFreq(expr) {
   const t = String(expr || "").trim();
   if (/^@every\s+/i.test(t)) {
     const m = t.replace(/^@every\s+/i, "").match(/^(\d+)([mhd])$/i);
-    if (m) { $("cronEveryN").value = m[1]; $("cronEveryUnit").value = m[2].toLowerCase(); }
+    if (m) { $("cronEveryN").value = m[1]; setUnit(m[2].toLowerCase()); }
     selectMainFreq("interval");
     return;
   }
@@ -802,8 +833,9 @@ function cronToFreq(expr) {
     // 日期字段是纯数字列表(含单值"1") → 日期标签；否则按天/周处理
     const domNumeric = dom !== "*" && dom !== "?" && !dom.includes("/") && /^[0-9,]+$/.test(dom);
     if (dom.startsWith("*/")) {
-      $("cronEveryDays").value = dom.slice(2);
-      selectMainFreq("day");
+      $("cronEveryN").value = dom.slice(2);
+      setUnit("d");
+      selectMainFreq("interval");
     } else if (dow !== "*" && !domNumeric) {
       setMultiselect("#cronWeekdays", String(dow).split(","));
       selectMainFreq("week");
@@ -811,7 +843,9 @@ function cronToFreq(expr) {
       setMultiselect("#cronDates", String(dom).split(","));
       selectMainFreq("date");
     } else {
-      selectMainFreq("day");
+      // 纯 "分 时 * * *" = 每天 → 归入"每 N 单位"的 天=1
+      setUnit("d");
+      selectMainFreq("interval");
     }
   }
 }
@@ -858,9 +892,7 @@ document.querySelectorAll(".cron-freq button").forEach(b => b.addEventListener("
   if (b.dataset.freq === "month") { setFreq("month"); updateCronPreview(); return; }
   selectMainFreq(b.dataset.freq);
 }));
-$("cronEveryDays").addEventListener("input", updateCronPreview);
-$("cronEveryN").addEventListener("input", updateCronPreview);
-$("cronEveryUnit").addEventListener("change", updateCronPreview);
+$("cronEveryN").addEventListener("input", () => { updateCronPreview(); });
 // 表达式框：实时编辑时标记，失焦/回车后解析回填可视化选择
 $("cronPreviewText").addEventListener("focus", () => { editingExpr = true; });
 $("cronPreviewText").addEventListener("input", () => {
@@ -892,17 +924,13 @@ document.querySelectorAll(".stepper").forEach(sp => {
   inc.addEventListener("click", () => { input.value = Number(input.value || 0) + 1; clamp(); });
   dec.addEventListener("click", () => { input.value = Math.max(Number(input.min || 1), Number(input.value || 1) - 1); clamp(); });
 });
-// 天 预设
-document.querySelectorAll('[data-cfg="day"] .cron-presets button').forEach(b => b.addEventListener("click", () => {
-  $("cronEveryDays").value = b.dataset.n; updateCronPreview();
-}));
-// 间隔 预设
-document.querySelectorAll('[data-cfg="interval"] .cron-presets button').forEach(b => b.addEventListener("click", () => {
-  $("cronEveryN").value = b.dataset.n; $("cronEveryUnit").value = b.dataset.u; updateCronPreview();
-}));
+
 // 月份网格点击已通过 cronMonths 的独立事件处理
 
-// 初始预览
+// 单位分段按钮联动
+document.querySelectorAll("#unitSeg button").forEach(b => b.addEventListener("click", () => setUnit(b.dataset.u)));
+setUnit("d"); // 初始单位：天（默认每天）
+renderUnitPresets();
 updateCronPreview();
 
 // ---------- 节点选择器 ----------
