@@ -162,64 +162,65 @@
   textarea.term::placeholder { color: #475569; }
   textarea.term:focus { outline: none; border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,.15); }
 
-  /* ---------- cron 可视化选择器（左钟表时间 / 右频率） ---------- */
+  /* ---------- cron 可视化选择器（电子钟 + 频率网格 + 月份叠加） ---------- */
   .cron-wizard { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
-  .cron-main { display: flex; min-height: 240px; }
-  .cron-time { width: 208px; flex: none; border-right: 1px solid #f1f5f9; background: #f8fafc;
+  .cron-main { display: flex; min-height: 250px; }
+  .cron-time { width: 196px; flex: none; border-right: 1px solid #f1f5f9; background: #f8fafc;
                display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-               padding: 14px 8px; gap: 8px; }
-  .cron-time .cap { color: var(--faint); font-size: 11.5px; }
+               padding: 14px 8px; gap: 6px; }
+  .cron-time .cap { color: var(--faint); font-size: 11.5px; margin-bottom: 4px; }
 
-  /* 时钟 */
-  .clock { position: relative; width: 168px; height: 168px; flex: none; }
-  .clock-face { position: absolute; inset: 0; border-radius: 50%;
-                background: radial-gradient(circle at 50% 35%, #fff, #f1f5f9);
-                border: 1px solid var(--border); box-shadow: inset 0 2px 6px rgba(15,23,42,.06); }
-  .clock-face::after { content: ""; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px;
-                       transform: translate(-50%,-50%); border-radius: 50%; background: var(--primary); }
-  .clock-dot { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%;
-               display: flex; align-items: center; justify-content: center;
-               font-size: 9px; font-weight: 600; color: var(--muted); cursor: pointer;
-               background: #fff; border: 1px solid var(--border); user-select: none;
-               transition: background .1s, color .1s, border-color .1s, transform .1s; }
-  .clock-dot:hover { border-color: var(--primary); color: var(--primary-deep); }
-  .clock-dot.h { color: var(--text); font-size: 10px; }
-  .clock-dot.on { background: var(--primary); border-color: var(--primary); color: #fff;
-                  transform: scale(1.15); }
-  .clock-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
-                  text-align: center; pointer-events: none; }
-  .clock-center .digits { font-family: var(--mono); font-size: 19px; font-weight: 700; color: var(--text);
-                          letter-spacing: 1px; }
-  .clock-center .sub { font-size: 9.5px; color: var(--faint); }
-  .cron-time input[type=time] { font-family: var(--mono); font-size: 13px;
-    border: 1px solid var(--border); border-radius: 7px; padding: 4px 8px; width: 108px;
-    background: #fff; text-align: center; color: var(--muted); }
-  .cron-time input[type=time]:focus { outline: none; border-color: var(--primary);
-    box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
+  /* 电子钟 */
+  .digiclock { display: flex; align-items: center; gap: 5px; background: #0f172a; border-radius: 14px;
+               padding: 16px 16px; box-shadow: inset 0 2px 10px rgba(0,0,0,.45); }
+  .digiclock .seg { width: 52px; background: transparent; border: 0; border-radius: 8px;
+                    color: #7dd3fc; font-family: var(--mono); font-size: 40px; font-weight: 700;
+                    text-align: center; padding: 2px 0; caret-color: #38bdf8; }
+  .digiclock .seg:focus { outline: none; background: rgba(56,189,248,.16); color: #e0f2fe; }
+  .digiclock .colon { color: #38bdf8; font-family: var(--mono); font-size: 34px; font-weight: 700;
+                      animation: clkBlink 1s steps(1) infinite; }
+  @keyframes clkBlink { 50% { opacity: .25; } }
+  .clk-hint { color: var(--faint); font-size: 11px; text-align: center; line-height: 1.5; }
+  .clk-extras { margin-top: 2px; }
+  .clk-extras button { font-size: 11px; padding: 3px 12px; border-radius: 999px;
+    background: #fff; color: var(--muted); border: 1px solid var(--border); }
+  .clk-extras button:hover { border-color: var(--primary); color: var(--primary-deep); background: var(--primary-soft); }
 
   .cron-right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
-  .cron-freq { display: flex; gap: 2px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
-  .cron-freq button { font-size: 12px; padding: 4px 13px; border-radius: 999px;
+  .cron-freq { display: flex; gap: 3px; flex-wrap: wrap; padding: 8px 10px; border-bottom: 1px solid #f1f5f9; }
+  .cron-freq button { font-size: 12.5px; padding: 5px 16px; border-radius: 999px;
     background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
   .cron-freq button:hover { background: var(--primary-soft); color: var(--primary-deep); border-color: #bae6fd; filter: none; }
   .cron-freq button.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
-  .cron-config { padding: 12px 14px; flex: 1; display: flex; align-items: flex-start; }
-  .cron-config .row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; }
-  .cron-config .row .tip { color: var(--faint); font-size: 11px; }
-  .cron-config .num { width: 64px; }
-  .cron-config .num-unit { display: flex; align-items: center; gap: 6px; }
-  .cron-config .num-unit .lbl { color: var(--muted); font-size: 12.5px; }
-  .cron-tile { display: flex; gap: 6px; }
-  .cron-tile button { font-size: 12px; padding: 4px 14px; border-radius: 8px;
-    background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
-  .cron-tile button.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
-  .cron-multiselect { display: flex; gap: 4px; flex-wrap: wrap; }
-  .cron-multiselect button { width: 30px; height: 30px; border-radius: 7px; font-size: 11.5px;
+  .cron-config { padding: 12px 14px 14px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .cron-config .row { display: none; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .cron-config .row.active { display: flex; }
+  .cron-config .tip { color: var(--faint); font-size: 11px; }
+
+  .cron-config .num { width: 64px; font-family: var(--mono); }
+  .cron-config .num-unit { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .cron-config .num-unit .lbl { color: var(--muted); font-size: 13px; }
+
+  /* 频率网格 */
+  .freq-toolbar { display: flex; justify-content: space-between; align-items: center; width: 100%; margin-bottom: 6px; }
+  .freq-toolbar .lbl { font-size: 12.5px; color: var(--text); font-weight: 600; }
+  .freq-toolbar .hint { font-weight: 400; }
+  .qbtn { display: flex; gap: 4px; }
+  .qbtn button { font-size: 11px; padding: 3px 12px; border-radius: 999px;
+    background: #fff; color: var(--faint); border: 1px solid var(--border); }
+  .qbtn button:hover { color: var(--primary-deep); border-color: var(--primary); }
+  .freq-grid { display: grid; gap: 5px; }
+  .freq-grid.cols7 { grid-template-columns: repeat(7, 36px); }
+  .freq-grid.cols6 { grid-template-columns: repeat(6, 52px); }
+  .freq-grid button { height: 36px; border-radius: 8px; font-size: 12.5px;
     background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); padding: 0; }
-  .cron-multiselect button:hover { border-color: var(--primary); color: var(--primary-deep); }
-  .cron-multiselect button.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
-  .cron-multiselect .quick { width: auto; padding: 0 8px; }
-  .cron-note { color: var(--warn); font-size: 11.5px; }
+  .freq-grid button:hover { border-color: var(--primary); color: var(--primary-deep); }
+  .freq-grid button.on { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+
+  /* 月份叠加 */
+  .months-overlay { border-top: 1px dashed var(--border); padding-top: 10px; margin-top: 2px; }
+  .month-toggle { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); font-weight: 500; cursor: pointer; }
+  .month-toggle input { accent-color: var(--primary); }
   .cron-custom-input { width: 100%; font-family: var(--mono); font-size: 13px;
     padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px; }
   .cron-custom-input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
@@ -353,39 +354,40 @@
             <div class="cron-main">
               <div class="cron-time">
                 <span class="cap">什么时候执行</span>
-                <div class="clock" id="clock">
-                  <div class="clock-face" id="clockFace"></div>
-                  <div class="clock-center">
-                    <div class="digits" id="clockDigits">03:00</div>
-                    <div class="sub">点击表盘选时</div>
-                  </div>
+                <div class="digiclock" id="digiclock" title="点击时段，滚轮 / 上下键调整，也可直接输入数字">
+                  <input type="text" class="seg" id="clkH" value="03" inputmode="numeric" maxlength="2" aria-label="小时">
+                  <span class="colon">:</span>
+                  <input type="text" class="seg" id="clkM" value="00" inputmode="numeric" maxlength="2" aria-label="分钟">
                 </div>
-                <input type="time" id="cronTime" value="03:00" title="精确输入">
+                <div class="clk-hint">点击时段 · 滚轮 / ↑↓ · 直接输数字</div>
+                <div class="clk-extras"><button type="button" id="clkNow" title="设为当前时间">现在</button></div>
               </div>
               <div class="cron-right">
                 <div class="cron-freq">
-                  <button type="button" data-freq="day">天</button>
+                  <button type="button" data-freq="day" class="active">天</button>
                   <button type="button" data-freq="week">周</button>
-                  <button type="button" data-freq="month">月</button>
-                  <button type="button" data-freq="year">年</button>
+                  <button type="button" data-freq="date">日期</button>
                   <button type="button" data-freq="interval">间隔</button>
-                  <button type="button" data-freq="custom" class="active">自定义</button>
+                  <button type="button" data-freq="custom">自定义</button>
                 </div>
                 <div class="cron-config">
-                  <div class="row" data-cfg="day" style="display:none">
-                    <div class="cron-tile" id="dayTile">
-                      <button type="button" data-tile="every" class="active">每天</button>
-                      <button type="button" data-tile="n">每 N 天</button>
-                    </div>
-                    <div class="num-unit" id="dayNBox" style="display:none">
-                      <span class="lbl">每</span>
-                      <input type="number" id="cronEveryDays" class="num" value="2" min="1" max="30">
+                  <div class="row active" data-cfg="day">
+                    <div class="num-unit"><span class="lbl">每</span>
+                      <input type="number" id="cronEveryDays" class="num" value="1" min="1" max="30">
                       <span class="lbl">天</span>
                     </div>
+                    <span class="tip">N = 1 表示每天；N = 3 表示每 3 天执行一次</span>
                   </div>
-                  <div class="row" data-cfg="week" style="display:none">
-                    <div class="cron-multiselect" id="cronWeekdays">
-                      <button type="button" data-v="1" class="on">一</button>
+                  <div class="row" data-cfg="week">
+                    <div class="freq-toolbar">
+                      <span class="lbl">每周几执行</span>
+                      <span class="qbtn">
+                        <button type="button" data-quick="all">全选</button>
+                        <button type="button" data-quick="none">清空</button>
+                      </span>
+                    </div>
+                    <div class="freq-grid cols7" id="cronWeekdays">
+                      <button type="button" data-v="1">一</button>
                       <button type="button" data-v="2">二</button>
                       <button type="button" data-v="3">三</button>
                       <button type="button" data-v="4">四</button>
@@ -393,38 +395,20 @@
                       <button type="button" data-v="6">六</button>
                       <button type="button" data-v="0">日</button>
                     </div>
-                    <span class="tip">多选为「或」关系，即每周这几天的同一时间各执行一次</span>
+                    <span class="tip">多选 = 每周这些天各执行一次（周一到周日）</span>
                   </div>
-                  <div class="row" data-cfg="month" style="display:none">
-                    <div class="cron-multiselect" id="cronMdays">
-                      <button type="button" class="quick" data-quick="all">全选</button>
-                      <button type="button" class="quick" data-quick="none">清空</button>
+                  <div class="row" data-cfg="date">
+                    <div class="freq-toolbar">
+                      <span class="lbl">每月的几号执行</span>
+                      <span class="qbtn">
+                        <button type="button" data-quick="all">全选</button>
+                        <button type="button" data-quick="none">清空</button>
+                      </span>
                     </div>
-                    <span class="tip">勾选每月的哪些日期执行（可多选）</span>
+                    <div class="freq-grid cols7" id="cronDates"></div>
+                    <span class="tip">多选 = 每月这些日期各执行一次（1~31 号）</span>
                   </div>
-                  <div class="row" data-cfg="year" style="display:none">
-                    <div class="cron-multiselect" id="cronMonths">
-                      <button type="button" data-v="1">1月</button>
-                      <button type="button" data-v="2">2月</button>
-                      <button type="button" data-v="3">3月</button>
-                      <button type="button" data-v="4">4月</button>
-                      <button type="button" data-v="5">5月</button>
-                      <button type="button" data-v="6">6月</button>
-                      <button type="button" data-v="7">7月</button>
-                      <button type="button" data-v="8">8月</button>
-                      <button type="button" data-v="9">9月</button>
-                      <button type="button" data-v="10">10月</button>
-                      <button type="button" data-v="11">11月</button>
-                      <button type="button" data-v="12">12月</button>
-                    </div>
-                    <span class="tip">← 选择月份（可多选）</span>
-                    <div class="cron-multiselect" id="cronYdays">
-                      <button type="button" class="quick" data-quick="all">全选</button>
-                      <button type="button" class="quick" data-quick="none">清空</button>
-                    </div>
-                    <span class="tip">再勾选这些月份的哪些日期执行</span>
-                  </div>
-                  <div class="row" data-cfg="interval" style="display:none">
+                  <div class="row" data-cfg="interval">
                     <div class="num-unit"><span class="lbl">每</span>
                       <input type="number" id="cronEveryN" value="5" min="1" class="num">
                       <select id="cronEveryUnit">
@@ -436,6 +420,14 @@
                   </div>
                   <div class="row" data-cfg="custom">
                     <input type="text" id="cronCustom" class="cron-custom-input" placeholder="0 3 * * *（分 时 日 月 周）">
+                  </div>
+                  <!-- 月份叠加层：对所有主频率生效，不影响天/周/日期选择 -->
+                  <div class="months-overlay" id="monthOverlay">
+                    <div class="freq-toolbar" style="margin-bottom:2px">
+                      <label class="month-toggle"><input type="checkbox" id="monthAll" checked> 全年</label>
+                      <span class="hint" style="color:var(--faint);font-size:11px">取消勾选后限定在指定月份执行</span>
+                    </div>
+                    <div class="freq-grid cols6" id="cronMonths" style="margin-top:6px"></div>
                   </div>
                 </div>
               </div>
@@ -596,52 +588,99 @@ async function refreshTasks() {
   } catch (e) { showError("加载任务失败: " + e.message); }
 }
 
-// ---------- cron 可视化选择器（钟表 + 天/周/月/年） ----------
+// ---------- cron 可视化选择器（电子钟 + 天/周/日期 + 月份叠加） ----------
 const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
 function pad(n) { return String(n).padStart(2, "0"); }
+// time input 是 "时:分"，cron 是 "分 时"
 function timeToCron(v) { const p = String(v || "00:00").split(":"); return p[1] + " " + p[0]; }
 function fmtTime(expr) {
   const p = String(expr).trim().split(/\s+/);
   if (p.length >= 2 && /^\d+$/.test(p[0]) && /^\d+$/.test(p[1])) return pad(p[1]) + ":" + pad(p[0]);
   return "00:00";
 }
+
+/* ---------- 电子钟：点击时段 / 滚轮 / 上下键 / 直输 ---------- */
+const clkH = $("clkH"), clkM = $("clkM");
+function clampClock() {
+  clkH.value = pad(Math.min(23, Math.max(0, Number(clkH.value) || 0)));
+  clkM.value = pad(Math.min(59, Math.max(0, Number(clkM.value) || 0)));
+}
+function clockValue() { clampClock(); return clkH.value + ":" + clkM.value; }
+function clockFromStr(v) {
+  const p = String(v || "03:00").split(":");
+  clkH.value = pad(Number(p[0]) || 0); clkM.value = pad(Number(p[1]) || 0);
+}
+function stepClock(deltaH, deltaM) {
+  const cur = clockValue().split(":"); let h = Number(cur[0]), m = Number(cur[1]);
+  h = (h + deltaH + 24) % 24; m = (m + deltaM + 60) % 60;
+  clockFromStr(pad(h) + ":" + pad(m));
+  updateClockPreview();
+}
+function onClockEdit() {
+  // 直输：非数字清掉
+  clkH.value = clkH.value.replace(/\D/g, "").slice(0, 2);
+  clkM.value = clkM.value.replace(/\D/g, "").slice(0, 2);
+  updateClockPreview();
+}
+function updateClockPreview() { updateCronPreview(); }
+["clkH", "clkM"].forEach(id => {
+  const el = $(id);
+  el.addEventListener("focus", () => el.select());
+  el.addEventListener("input", onClockEdit);
+  el.addEventListener("change", onClockEdit);
+  // 滚轮调整
+  el.addEventListener("wheel", (e) => {
+    if (document.activeElement === el) { e.preventDefault(); stepClock(id === "clkH" ? (e.deltaY < 0 ? 1 : -1) : 0, id === "clkM" ? (e.deltaY < 0 ? 1 : -1) : 0); }
+  });
+  // 上下键
+  el.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowUp") { e.preventDefault(); stepClock(id === "clkH" ? 1 : 0, id === "clkM" ? 1 : 0); }
+    if (e.key === "ArrowDown") { e.preventDefault(); stepClock(id === "clkH" ? -1 : 0, id === "clkM" ? -1 : 0); }
+  });
+});
+$("clkNow").addEventListener("click", () => {
+  const d = new Date();
+  clockFromStr(pad(d.getHours()) + ":" + pad(d.getMinutes()));
+  updateClockPreview();
+});
+
 function currentFreq() {
   return document.querySelector(".cron-freq button.active")?.dataset.freq || "day";
 }
 function setFreq(freq) {
   document.querySelectorAll(".cron-freq button").forEach(b => b.classList.toggle("active", b.dataset.freq === freq));
-  document.querySelectorAll(".cron-config .row").forEach(r => { r.style.display = r.dataset.cfg === freq ? "" : "none"; });
+  document.querySelectorAll(".cron-config .row").forEach(r => r.classList.toggle("active", r.dataset.cfg === freq));
 }
 function multiselectVals(sel) { return [...document.querySelectorAll(sel + " button.on")].map(b => b.dataset.v).filter(Boolean); }
-
+function monthEmit() {
+  if ($("monthAll").checked) return "*";
+  const ms = multiselectVals("#cronMonths");
+  return ms.length ? ms.join(",") : "*";
+}
 function freqToCron() {
   const freq = currentFreq();
-  const t = timeToCron($("cronTime").value);
+  const t = timeToCron(clockValue());
+  const mon = monthEmit();
   switch (freq) {
     case "day": {
-      if (document.querySelector("#dayTile button.active")?.dataset.tile === "n") {
-        return t + " */" + (Number($("cronEveryDays").value || 2)) + " * *";
-      }
-      return t + " * * *";
+      const n = Number($("cronEveryDays").value || 1);
+      return t + (n > 1 ? " */" + n : " *") + " " + mon + " *";
     }
     case "week": {
       const dows = multiselectVals("#cronWeekdays");
-      return t + " * * " + (dows.length ? dows.join(",") : "0");
+      return t + " * " + mon + " " + (dows.length ? dows.join(",") : "*");
     }
-    case "month": {
-      const days = multiselectVals("#cronMdays");
-      return t + " " + (days.length ? days.join(",") : "*") + " * *";
-    }
-    case "year": {
-      const days = multiselectVals("#cronYdays");
-      const ms = multiselectVals("#cronMonths");
-      return t + " " + (days.length ? days.join(",") : "*") + " " + (ms.length ? ms.join(",") : "*") + " *";
+    case "date": {
+      const ds = multiselectVals("#cronDates");
+      return t + " " + (ds.length ? ds.join(",") : "*") + " " + mon + " *";
     }
     case "interval": return "@every " + Number($("cronEveryN").value || 5) + $("cronEveryUnit").value;
     case "custom": return $("cronCustom").value.trim() || "0 3 * * *";
   }
   return "0 3 * * *";
 }
+function monthsEmit() { return monthEmit(); }
+
 function humanizeCron(expr) {
   const t = String(expr).trim();
   if (/^@every\s+/i.test(t)) return "每 " + t.replace(/^@every\s+/i, "");
@@ -649,13 +688,14 @@ function humanizeCron(expr) {
   if (p.length < 5) return t;
   const tm = pad(p[1]) + ":" + pad(p[0]);
   const dom = p[2], mon = p[3], dow = p[4];
-  if (dom.startsWith("*/")) return "每 " + dom.slice(2) + " 天 " + tm;
+  const ms = mon !== "*" ? String(mon).split(",") : [];
+  const mTxt = ms.length ? "，" + ms.map(Number).join("/") + " 月" : "";
+  if (dom.startsWith("*/")) return "每 " + dom.slice(2) + " 天 " + tm + mTxt;
   const dows = dow !== "*" ? String(dow).split(",") : [];
-  const mons = mon !== "*" ? String(mon).split(",") : [];
-  if (mons.length) return "每年 " + mons.map(Number).join("、") + " 月" + (dom !== "*" ? " " + dom + " 号" : "") + " " + tm;
-  if (dows.length) return "每周" + dows.map(d => WEEKDAY_NAMES[Number(d)]).join("、") + " " + tm;
-  if (dom !== "*") return "每月 " + dom + " 号 " + tm;
-  if (p[1] !== "*") return "每天 " + tm;
+  const ds = dom !== "*" ? String(dom).split(",") : [];
+  if (dows.length && dom === "*") return "每周" + dows.map(d => WEEKDAY_NAMES[Number(d)]).join("、") + " " + tm + mTxt;
+  if (ds.length) return "每月 " + ds.map(Number).join("/") + " 号 " + tm + mTxt;
+  if (p[1] !== "*") return "每天 " + tm + mTxt;
   return t;
 }
 function updateCronPreview() {
@@ -677,24 +717,22 @@ function cronToFreq(expr) {
   const p = t.split(/\s+/);
   if (p.length >= 5) {
     const dom = p[2], mon = p[3], dow = p[4];
+    clockFromStr(fmtTime(t));
+    // 月份叠加
+    if (mon !== "*" && mon !== "1") {
+      $("monthAll").checked = false;
+      setMultiselect("#cronMonths", String(mon).split(","));
+    } else { $("monthAll").checked = true; }
     if (dom.startsWith("*/")) {
-      document.querySelector('#dayTile button[data-tile="n"]').classList.add("active");
-      document.querySelector('#dayTile button[data-tile="every"]').classList.remove("active");
-      $("dayNBox").style.display = "";
       $("cronEveryDays").value = dom.slice(2);
       setFreq("day");
-    } else if (mon !== "*" && mon.trim() !== "1") {
-      setMultiselect("#cronMonths", String(mon).split(","));
-      if (dom !== "*") setMultiselect("#cronYdays", String(dom).split(","));
-      setFreq("year");
     } else if (dow !== "*" && (dom === "*" || dom === "?")) {
       setMultiselect("#cronWeekdays", String(dow).split(","));
       setFreq("week");
-    } else if (dom !== "*" && dom !== "1" && mon === "*") {
-      setMultiselect("#cronMdays", String(dom).split(","));
-      setFreq("month");
+    } else if (dom !== "*" && dom !== "1") {
+      setMultiselect("#cronDates", String(dom).split(","));
+      setFreq("date");
     } else {
-      $("cronTime").value = fmtTime(t);
       setFreq("day");
     }
   } else {
@@ -704,88 +742,45 @@ function cronToFreq(expr) {
 }
 function buildCronExpr() { return freqToCron(); }
 
-/* ---------- 时钟组件 ---------- */
-(function buildClock() {
-  const face = $("clockFace"), R = 84, HR = 62, MR = 42;
-  for (let h = 1; h <= 12; h++) {
-    const ang = (h * 30 - 90) * Math.PI / 180;
-    const el = document.createElement("div");
-    el.className = "clock-dot h"; el.dataset.h = String(h); el.textContent = String(h);
-    el.style.left = (R + HR * Math.cos(ang)) + "px";
-    el.style.top = (R + HR * Math.sin(ang)) + "px";
-    el.addEventListener("click", () => {
-      document.querySelectorAll(".clock-dot.h").forEach(x => x.classList.remove("on"));
-      el.classList.add("on");
-      syncClock();
-    });
-    face.appendChild(el);
-  }
-  for (let m = 0; m < 12; m++) {
-    const ang = (m * 30 - 90) * Math.PI / 180;
-    const el = document.createElement("div");
-    el.className = "clock-dot"; el.dataset.m = String(m * 5); el.textContent = String(m * 5).padStart(2, "0");
-    el.style.left = (R + MR * Math.cos(ang)) + "px";
-    el.style.top = (R + MR * Math.sin(ang)) + "px";
-    el.addEventListener("click", () => {
-      document.querySelectorAll(".clock-dot[data-m]").forEach(x => x.classList.remove("on"));
-      el.classList.add("on");
-      syncClock();
-    });
-    face.appendChild(el);
-  }
-})();
-function syncClock() {
-  const selH = document.querySelector(".clock-dot.h.on");
-  const selM = document.querySelector(".clock-dot[data-m].on");
-  if (!selH || !selM) return;
-  $("cronTime").value = pad(selH.dataset.h) + ":" + pad(selM.dataset.m);
-  $("clockDigits").textContent = pad(selH.dataset.h) + ":" + pad(selM.dataset.m);
-  updateCronPreview();
-}
-function updateClockHighlights() {
-  const p = String($("cronTime").value || "03:00").split(":");
-  const h = Number(p[0]), m = Number(p[1]);
-  document.querySelectorAll(".clock-dot.h").forEach(x => x.classList.toggle("on", Number(x.dataset.h) === (h % 12 || 12)));
-  const mSel = Math.round(m / 5) * 5 % 60;
-  document.querySelectorAll(".clock-dot[data-m]").forEach(x => x.classList.toggle("on", Number(x.dataset.m) === mSel));
-}
-
-// 日期按钮（月/年两面板 1-28，避免月末缺失）
-function addDayButtons(sel) {
-  const box = document.querySelector(sel);
-  for (let i = 1; i <= 28; i++) {
+// 初始化日期(1-31) 与月份(1-12) 网格按钮
+(function initGrids() {
+  const dates = $("cronDates");
+  for (let i = 1; i <= 31; i++) {
     const b = document.createElement("button");
     b.type = "button"; b.dataset.v = String(i); b.textContent = String(i);
     b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); });
-    box.appendChild(b);
+    dates.appendChild(b);
   }
-}
-addDayButtons("#cronMdays");
-addDayButtons("#cronYdays");
-["#cronMdays", "#cronYdays"].forEach(sel => {
-  const allBtn = document.querySelector(sel + " .quick[data-quick=all]");
-  const noneBtn = document.querySelector(sel + " .quick[data-quick=none]");
-  allBtn.addEventListener("click", () => {
-    document.querySelectorAll(sel + " button[data-v]").forEach(b => b.classList.add("on")); updateCronPreview();
-  });
-  noneBtn.addEventListener("click", () => {
-    document.querySelectorAll(sel + " button[data-v]").forEach(b => b.classList.remove("on")); updateCronPreview();
-  });
+  dates.querySelector("button")?.classList.add("on"); // 默认勾选 1 号
+  const months = $("cronMonths");
+  for (let i = 1; i <= 12; i++) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.v = String(i); b.textContent = i + "月";
+    b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); });
+    months.appendChild(b);
+  }
+})();
+// 行内 .qbtn 工具栏（周/日期的全选/清空）
+document.querySelectorAll(".qbtn").forEach(toolbar => {
+  const grid = toolbar.closest(".row").querySelector(".freq-grid");
+  if (!grid) return;
+  const allB = toolbar.querySelector('[data-quick="all"]');
+  const noneB = toolbar.querySelector('[data-quick="none"]');
+  if (allB) allB.addEventListener("click", () => { grid.querySelectorAll("button").forEach(b => b.classList.add("on")); updateCronPreview(); });
+  if (noneB) noneB.addEventListener("click", () => { grid.querySelectorAll("button").forEach(b => b.classList.remove("on")); updateCronPreview(); });
 });
 
 // 交互绑定
 document.querySelectorAll(".cron-freq button").forEach(b => b.addEventListener("click", () => { setFreq(b.dataset.freq); updateCronPreview(); }));
-document.querySelectorAll("#dayTile button").forEach(b => b.addEventListener("click", () => {
-  document.querySelectorAll("#dayTile button").forEach(x => x.classList.toggle("active", x === b));
-  $("dayNBox").style.display = b.dataset.tile === "n" ? "" : "none";
-  updateCronPreview();
-}));
 $("cronEveryDays").addEventListener("input", updateCronPreview);
-["cronTime", "cronEveryN", "cronEveryUnit", "cronCustom"].forEach(id => $(id).addEventListener("input", () => { updateClockHighlights(); updateCronPreview(); }));
-document.querySelectorAll("#cronWeekdays button, #cronMonths button").forEach(b => b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); }));
+$("cronEveryN").addEventListener("input", updateCronPreview);
+$("cronEveryUnit").addEventListener("change", updateCronPreview);
+$("cronCustom").addEventListener("input", updateCronPreview);
+$("cronWeekdays").addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if (b) { b.classList.toggle("on"); updateCronPreview(); } });
+$("monthAll").addEventListener("change", updateCronPreview);
 
-// 初始时钟高亮
-updateClockHighlights();
+// 初始预览
+updateCronPreview();
 
 // ---------- 节点选择器 ----------
 function renderNodeList() {
