@@ -164,9 +164,9 @@
 
   /* ---------- cron 可视化选择器（电子钟 + 频率网格 + 月份叠加） ---------- */
   .cron-wizard { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: #fff; }
-  .cron-main { display: flex; min-height: 250px; }
+  .cron-main { display: flex; align-items: stretch; }
   .exec-side { width: 300px; flex: none; border-right: 1px solid #f1f5f9; background: #f8fafc;
-               padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+               padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; min-height: 340px; }
   .side-cap { color: var(--faint); font-size: 11.5px; margin-bottom: 0; font-weight: 600; }
   /* 执行方式分段切换（选中谁显示谁） */
   .exec-tabs { display: flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: #fff; }
@@ -278,6 +278,10 @@
                       box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
   .cron-sync-hint { font-size: 11px; color: var(--faint); cursor: pointer; }
   .cron-sync-hint:hover { color: var(--primary-deep); }
+  /* 月份限定：独立叠加区（与主周期行区分） */
+  .month-limit { border-top: 1px dashed var(--border); margin-top: 10px; padding-top: 10px;
+                 display: flex; flex-direction: column; gap: 6px; }
+
   .cron-preview { font-family: var(--mono); font-size: 13px; color: var(--primary-deep);
     background: var(--primary-soft); border-top: 1px solid #bae6fd; padding: 7px 14px;
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -426,18 +430,17 @@
                 </div>
                 <div class="semantics" id="execSemantics">每天 03:00 执行</div>
               </div>
-              <!-- 右：周期 -->
+              <!-- 右：周期（每天/每周/每月 + 月份限定独立叠加） -->
               <div class="cron-right">
-                <div class="side-cap">周期 <span class="hint">（在什么范围内重复）</span></div>
+                <div class="side-cap">周期</div>
                 <div class="cron-freq">
                   <button type="button" data-cycle="daily" class="active">每天</button>
                   <button type="button" data-cycle="week">每周</button>
                   <button type="button" data-cycle="month">每月</button>
-                  <button type="button" data-cycle="year">每年</button>
                 </div>
                 <div class="cron-config">
                   <div class="row active" data-cfg="daily">
-                    <span class="tip">每个选定的周期日都会在指定时刻（或按指定频率）执行</span>
+                    <span class="tip">每个周期日在指定时刻（或按频率）执行</span>
                   </div>
                   <div class="row" data-cfg="week">
                     <div class="freq-toolbar">
@@ -467,23 +470,17 @@
                     </div>
                     <div class="freq-grid cols7" id="cronDates"></div>
                   </div>
-                  <div class="row" data-cfg="year">
+                  <!-- 月份限定：独立叠加，只选月份，与主周期自由组合 -->
+                  <div class="month-limit" id="monthLimit">
                     <div class="freq-toolbar">
-                      <span class="lbl">哪几个月执行</span>
+                      <span class="lbl">月份限定 <span class="hint">（可选，叠加在周期上）</span></span>
                       <span class="qbtn">
                         <button type="button" data-quick="all">全选</button>
                         <button type="button" data-quick="none">清空</button>
                       </span>
                     </div>
                     <div class="freq-grid cols6" id="cronMonths"></div>
-                    <div class="freq-toolbar" style="margin-top:10px">
-                      <span class="lbl">这些月份的几号 <span class="hint">（不选 = 每天）</span></span>
-                      <span class="qbtn">
-                        <button type="button" data-quick="all">全选</button>
-                        <button type="button" data-quick="none">清空</button>
-                      </span>
-                    </div>
-                    <div class="freq-grid cols7" id="cronYdays"></div>
+                    <span class="tip">不选 = 全年；选择后仅在所选月份执行</span>
                   </div>
                 </div>
               </div>
@@ -691,7 +688,8 @@ function stepClock(deltaH, deltaM) {
 /* ---------- 模式状态 ---------- */
 // execMode: "time"(固定时间) | "freq"(固定频率)
 // freqMode: "standard"(标准 cron) | "every"(@every)  —— 仅 execMode=freq 时有效
-// cycle: "daily" | "week" | "month" | "year"
+// cycle: "daily" | "week" | "month"（主周期，互斥）
+// 月份限定 = 独立叠加（cronMonths 网格选中项），不占 cycle
 let execMode = "time";
 let freqMode = "standard";
 let mainCycle = "daily";
@@ -745,7 +743,7 @@ function freqToCron() {
   return null;
 }
 function cycleFields() {
-  let dom = "*", mon = "*", dow = "*";
+  let dom = "*", dow = "*";
   switch (mainCycle) {
     case "week": {
       const dows = multiselectVals("#cronWeekdays");
@@ -757,14 +755,10 @@ function cycleFields() {
       dom = ds.length ? ds.join(",") : "*";
       break;
     }
-    case "year": {
-      const ms = multiselectVals("#cronMonths");
-      mon = ms.length ? ms.join(",") : "*";
-      const yds = multiselectVals("#cronYdays");
-      if (yds.length) dom = yds.join(",");
-      break;
-    }
   }
+  // 月份限定：独立叠加（不选 = 全年 *）
+  const ms = multiselectVals("#cronMonths");
+  const mon = ms.length ? ms.join(",") : "*";
   return [dom, mon, dow].join(" ");
 }
 
@@ -790,13 +784,12 @@ function humanizeCron(expr) {
   else if (p[1].startsWith("*/")) execTxt = "每 " + p[1].slice(2) + " 小时";
   else execTxt = tm;
   const mons = mon !== "*" ? String(mon).split(",") : [];
+  const mLimit = mons.length ? "（限 " + mons.map(Number).join("/") + " 月）" : "";
   let cycTxt;
   if (dow !== "*") cycTxt = "每周" + String(dow).split(",").map(d => WEEKDAY_NAMES[Number(d)]).join("、");
-  else if (dom !== "*" && mons.length) cycTxt = mons.map(Number).join("/") + " 月的 " + String(dom).split(",").map(Number).join("/") + " 号";
   else if (dom !== "*") cycTxt = "每月 " + String(dom).split(",").map(Number).join("/") + " 号";
-  else if (mons.length) cycTxt = mons.map(Number).join("/") + " 月的每天";
   else cycTxt = "每天";
-  return cycTxt + " " + execTxt + "执行";
+  return cycTxt + mLimit + " " + execTxt + "执行";
 }
 
 /* ---------- 预览与语义行 ---------- */
@@ -851,13 +844,15 @@ function cronToFreq(expr) {
     clockFromStr(fmtTime(t));
     setExec("time");
   }
+  // 月份限定：独立回填（不改变主周期）
+  if (mon !== "*") {
+    setMultiselect("#cronMonths", String(mon).split(","));
+  } else {
+    setMultiselect("#cronMonths", []);
+  }
   if (dow !== "*") {
     setMultiselect("#cronWeekdays", String(dow).split(","));
     setCycle("week");
-  } else if (mon !== "*") {
-    setMultiselect("#cronMonths", String(mon).split(","));
-    if (dom !== "*") setMultiselect("#cronYdays", String(dom).split(","));
-    setCycle("year");
   } else if (dom !== "*" && dom !== "?") {
     setMultiselect("#cronDates", String(dom).split(","));
     setCycle("month");
@@ -877,13 +872,6 @@ function buildCronExpr() { return freqToCron() || "@every 1m"; }
     dates.appendChild(b);
   }
   dates.querySelector("button")?.classList.add("on");
-  const ydays = $("cronYdays");
-  for (let i = 1; i <= 31; i++) {
-    const b = document.createElement("button");
-    b.type = "button"; b.dataset.v = String(i); b.textContent = String(i);
-    b.addEventListener("click", () => { b.classList.toggle("on"); updateCronPreview(); });
-    ydays.appendChild(b);
-  }
   const months = $("cronMonths");
   for (let i = 1; i <= 12; i++) {
     const b = document.createElement("button");
@@ -895,7 +883,9 @@ function buildCronExpr() { return freqToCron() || "@every 1m"; }
 
 /* ---------- 全选/清空工具栏 ---------- */
 document.querySelectorAll(".qbtn").forEach(toolbar => {
-  const grid = toolbar.closest(".row").querySelector(".freq-grid");
+  const scope = toolbar.closest(".row") || toolbar.closest(".month-limit");
+  if (!scope) return;
+  const grid = scope.querySelector(".freq-grid");
   if (!grid) return;
   const allB = toolbar.querySelector('[data-quick="all"]');
   const noneB = toolbar.querySelector('[data-quick="none"]');
