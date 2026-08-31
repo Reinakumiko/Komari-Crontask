@@ -282,6 +282,18 @@
   .month-limit { border-top: 1px dashed var(--border); margin-top: 10px; padding-top: 10px;
                  display: flex; flex-direction: column; gap: 6px; }
 
+  /* 周期标签（切换编辑维度，选择跨标签保留） */
+  .cycle-tabs { display: flex; gap: 3px; margin-bottom: 8px; }
+  .cycle-tabs button { font-size: 12.5px; padding: 5px 12px; border-radius: 999px;
+    background: #f1f5f9; color: var(--muted); border: 1px solid var(--border); }
+  .cycle-tabs button:hover { background: var(--primary-soft); color: var(--primary-deep); border-color: #bae6fd; }
+  .cycle-tabs button.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  .cycle-tabs .cnt { font-size: 10px; font-weight: 700; background: rgba(255,255,255,.25); border-radius: 999px;
+                     padding: 0 6px; margin-left: 2px; }
+  .cycle-tabs button:not(.active) .cnt { background: var(--primary-soft); color: var(--primary-deep); }
+  .cycle-panel { display: none; }
+  .cycle-panel.active { display: flex; flex-direction: column; gap: 6px; }
+
   .cron-preview { font-family: var(--mono); font-size: 13px; color: var(--primary-deep);
     background: var(--primary-soft); border-top: 1px solid #bae6fd; padding: 7px 14px;
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -430,13 +442,18 @@
                 </div>
                 <div class="semantics" id="execSemantics">每天 03:00 执行</div>
               </div>
-              <!-- 右：周期（三个独立过滤器，自由组合，不选=不限） -->
+              <!-- 右：周期（标签切换编辑维度，各维选择跨标签保留并自由组合） -->
               <div class="cron-right">
                 <div class="side-cap">周期 <span class="hint">（自由组合，不选 = 不限）</span></div>
-                <div class="cron-config" style="display:flex; flex-direction:column; gap:14px;">
-                  <div class="month-limit" id="weekBlock">
+                <div class="cycle-tabs">
+                  <button type="button" data-cyc="week" class="active">星期 <b class="cnt" id="cntWeek">0</b></button>
+                  <button type="button" data-cyc="date">日期 <b class="cnt" id="cntDate">0</b></button>
+                  <button type="button" data-cyc="month">月份 <b class="cnt" id="cntMonth">0</b></button>
+                </div>
+                <div class="cron-config">
+                  <div class="cycle-panel active" data-panel="week">
                     <div class="freq-toolbar">
-                      <span class="lbl">星期</span>
+                      <span class="lbl">选哪些星期执行</span>
                       <span class="qbtn">
                         <button type="button" data-quick="all">全选</button>
                         <button type="button" data-quick="none">清空</button>
@@ -452,9 +469,9 @@
                       <button type="button" data-v="0">日</button>
                     </div>
                   </div>
-                  <div class="month-limit" id="dateBlock">
+                  <div class="cycle-panel" data-panel="date">
                     <div class="freq-toolbar">
-                      <span class="lbl">日期（每月几号）</span>
+                      <span class="lbl">选每月几号执行</span>
                       <span class="qbtn">
                         <button type="button" data-quick="all">全选</button>
                         <button type="button" data-quick="none">清空</button>
@@ -462,9 +479,9 @@
                     </div>
                     <div class="freq-grid cols7" id="cronDates"></div>
                   </div>
-                  <div class="month-limit" id="monthBlock">
+                  <div class="cycle-panel" data-panel="month">
                     <div class="freq-toolbar">
-                      <span class="lbl">月份</span>
+                      <span class="lbl">选哪些月份执行</span>
                       <span class="qbtn">
                         <button type="button" data-quick="all">全选</button>
                         <button type="button" data-quick="none">清空</button>
@@ -702,6 +719,23 @@ function syncCycleDim() {
 }
 function multiselectVals(sel) { return [...document.querySelectorAll(sel + " button.on")].map(b => b.dataset.v).filter(Boolean); }
 
+/* 周期标签：切换当前编辑的维度（选择跨标签保留，互不干扰） */
+let cycleTab = "week";
+function setCycleTab(tab) {
+  cycleTab = tab;
+  document.querySelectorAll(".cycle-tabs button").forEach(b => b.classList.toggle("active", b.dataset.cyc === tab));
+  document.querySelectorAll(".cycle-panel").forEach(pp => pp.classList.toggle("active", pp.dataset.panel === tab));
+}
+/* 更新各维度标签上的已选数量 */
+function updateCycleCounts() {
+  const cw = multiselectVals("#cronWeekdays").length;
+  const cd = multiselectVals("#cronDates").length;
+  const cm = multiselectVals("#cronMonths").length;
+  $("cntWeek").textContent = cw;
+  $("cntDate").textContent = cd;
+  $("cntMonth").textContent = cm;
+}
+
 /* ---------- 表达式生成（电子钟 HH:MM 三种解读） ---------- */
 function freqToCron() {
   if (execMode === "time") {
@@ -771,6 +805,7 @@ function renderSemantics(expr) {
   $("execSemantics").textContent = expr ? humanizeCron(expr) : "此间隔标准 cron 无法表达，请切换 @every";
 }
 function updateCronPreview() {
+  updateCycleCounts();
   const expr = freqToCron();
   if (expr === null) {
     // 标准 cron 无法表达（如 2h30m）→ 语义行提示，表达式框保留
@@ -845,7 +880,7 @@ function buildCronExpr() { return freqToCron() || "@every 1m"; }
 
 /* ---------- 全选/清空工具栏 ---------- */
 document.querySelectorAll(".qbtn").forEach(toolbar => {
-  const scope = toolbar.closest(".row") || toolbar.closest(".month-limit");
+  const scope = toolbar.closest(".cycle-panel") || toolbar.closest(".row") || toolbar.closest(".month-limit");
   if (!scope) return;
   const grid = scope.querySelector(".freq-grid");
   if (!grid) return;
@@ -857,6 +892,7 @@ document.querySelectorAll(".qbtn").forEach(toolbar => {
 
 /* ---------- 交互绑定 ---------- */
 document.querySelectorAll(".exec-tabs button").forEach(b => b.addEventListener("click", () => setExec(b.dataset.exec)));
+document.querySelectorAll(".cycle-tabs button").forEach(b => b.addEventListener("click", () => setCycleTab(b.dataset.cyc)));
 document.querySelectorAll("#freqSubtabs button").forEach(b => b.addEventListener("click", () => setFreqMode(b.dataset.freq)));
 $("cronWeekdays").addEventListener("click", (e) => { const b = e.target.closest("button[data-v]"); if (b) { b.classList.toggle("on"); updateCronPreview(); } });
 // 表达式框双向同步
