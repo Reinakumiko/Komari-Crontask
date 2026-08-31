@@ -482,12 +482,20 @@
     return [];
   }
   function taskFromInput(input, now = (/* @__PURE__ */ new Date()).toISOString()) {
+    const rawType = String(input.type ?? "command");
+    const type = rawType === "sandbox" || rawType === "action" ? rawType : "command";
     return {
       id: asString(input.id, ""),
       name: asString(input.name, "Untitled task"),
       cron: asString(input.cron, ""),
+      type,
       command: asString(input.command, ""),
       nodes: asNodeIds(input.nodes),
+      sandboxCommand: asString(input.sandboxCommand, ""),
+      sandboxNetwork: asBoolean(input.sandboxNetwork, false),
+      sandboxStrict: asBoolean(input.sandboxStrict, true),
+      actionMethod: asString(input.actionMethod, ""),
+      actionParams: asString(input.actionParams, "{}"),
       timeout: asNumber(input.timeout, 300),
       notify: asBoolean(input.notify, true),
       enabled: asBoolean(input.enabled, true),
@@ -502,8 +510,23 @@
     if (!isEvery && fields < 5) {
       return "Cron must be a 5/6-field expression or @every interval";
     }
-    if (task.command === "") return "Command is required";
-    if (task.nodes.length === 0) return "At least one target node is required";
+    switch (task.type) {
+      case "command":
+        if (task.command === "") return "Command is required";
+        if (task.nodes.length === 0) return "At least one target node is required";
+        break;
+      case "sandbox":
+        if (task.sandboxCommand === "") return "Sandbox command is required";
+        break;
+      case "action":
+        if (task.actionMethod === "") return "Action method is required";
+        try {
+          JSON.parse(task.actionParams || "{}");
+        } catch {
+          return "Action params must be valid JSON";
+        }
+        break;
+    }
     return null;
   }
   function previewResult(result) {
@@ -521,6 +544,7 @@
       ts: now,
       taskId: task.id,
       name: task.name,
+      type: task.type,
       command: task.command,
       nodes: task.nodes,
       execTaskId,
@@ -530,6 +554,18 @@
         result: r.result,
         exit_code: r.exit_code
       }))
+    };
+  }
+  function buildSingleHistoryEntry(task, description, exitCode, timedOut, ok = exitCode === 0 || exitCode === null, now = (/* @__PURE__ */ new Date()).toISOString()) {
+    return {
+      ts: now,
+      taskId: task.id,
+      name: task.name,
+      type: task.type,
+      command: description,
+      timedOut,
+      ok,
+      results: [{ result: description, exit_code: exitCode }]
     };
   }
 
@@ -558,7 +594,12 @@
     return readJsonFileSync(TASKS_FILE, []);
   }
   function loadHistorySync() {
-    return readJsonFileSync(HISTORY_FILE, []);
+    const items = readJsonFileSync(HISTORY_FILE, []);
+    return items.map((it) => ({
+      ...it,
+      type: it.type ?? "command",
+      results: it.results ?? []
+    }));
   }
   function loadAuditSync() {
     return readJsonFileSync(AUDIT_FILE, []);
@@ -597,7 +638,7 @@
     for (const task of loadTasksSync()) {
       if (!task.enabled) continue;
       if (normalizeCronExpression(task.cron) !== expr) continue;
-      if (task.command === "" || task.nodes.length === 0) continue;
+      if (!isTaskExecutable(task)) continue;
       pending.push(dispatchTask(task));
     }
     return Promise.all(pending);
@@ -628,6 +669,34 @@
     }
     return names;
   }
+  function isTaskExecutable(t) {
+    switch (t.type) {
+      case "command":
+        return t.command !== "" && t.nodes.length > 0;
+      case "sandbox":
+        return t.sandboxCommand !== "";
+      case "action":
+        return t.actionMethod !== "";
+      default:
+        return false;
+    }
+  }
+  async function notifyFailure(task, message, clients) {
+    if (!task.notify) return;
+    try {
+      await import_plugin_sdk.server.call("admin:sendNotification", {
+        event: {
+          event: "TaskFailed",
+          message,
+          emoji: "\u26A0\uFE0F",
+          time: (/* @__PURE__ */ new Date()).toISOString(),
+          ...clients?.length ? { clients: clients.map((uuid) => ({ uuid })) } : {}
+        }
+      });
+    } catch (e) {
+      console.log(`[crontask] notify failed: ${String(e)}`);
+    }
+  }
   async function dispatchTask(task) {
     if (inFlight.has(task.id)) {
       console.log(`[crontask] task ${task.id} still running, skipping this fire`);
@@ -636,58 +705,278 @@
     inFlight.add(task.id);
     try {
       const effective = loadTasksSync().find((t) => t.id === task.id) ?? task;
-      if (effective.command === "" || effective.nodes.length === 0) {
-        console.log(`[crontask] task ${task.id} empty command or no nodes, skipping`);
+      if (!isTaskExecutable(effective)) {
+        console.log(`[crontask] task ${task.id} not executable (type=${effective.type}), skipping`);
         return;
       }
-      let taskId;
-      try {
-        const summary = await import_plugin_sdk.server.call("admin:exec", {
-          command: effective.command,
-          clients: effective.nodes
-        });
-        taskId = summary.task_id;
-      } catch (err) {
-        console.log(`[crontask] task ${task.id} exec failed: ${String(err)}`);
-        if (effective.notify) {
-          await import_plugin_sdk.server.call("admin:sendNotification", {
-            event: {
-              event: "TaskFailed",
-              message: `[Cron Task] ${effective.name}
-Exec failed: ${String(err)}`,
-              emoji: "\u26A0\uFE0F",
-              time: (/* @__PURE__ */ new Date()).toISOString()
-            }
-          });
-        }
-        return;
-      }
-      const { results, timedOut } = await pollTaskResults(
-        taskId,
-        effective.nodes,
-        effective.timeout
-      );
-      const entry = buildHistoryEntry(effective, taskId, results, timedOut);
-      appendHistorySync(entry);
-      if (isFailure(results) && effective.notify) {
-        const message = await buildFailureMessage(entry);
-        await import_plugin_sdk.server.call("admin:sendNotification", {
-          event: {
-            event: "TaskFailed",
-            message,
-            emoji: "\u26A0\uFE0F",
-            time: entry.ts,
-            clients: effective.nodes.map((uuid) => ({ uuid }))
-          }
-        });
-      } else {
-        console.log(
-          `[crontask] task ${task.id} round ${taskId} ok (${results.length} results)`
-        );
+      switch (effective.type) {
+        case "sandbox":
+          await dispatchSandboxTask(effective);
+          break;
+        case "action":
+          await dispatchActionTask(effective);
+          break;
+        default:
+          await dispatchRemoteTask(effective);
       }
     } finally {
       inFlight.delete(task.id);
     }
+  }
+  async function dispatchRemoteTask(effective) {
+    let taskId;
+    try {
+      const summary = await import_plugin_sdk.server.call("admin:exec", {
+        command: effective.command,
+        clients: effective.nodes
+      });
+      taskId = summary.task_id;
+    } catch (err) {
+      console.log(`[crontask] task ${effective.id} exec failed: ${String(err)}`);
+      await notifyFailure(effective, `[Cron Task] ${effective.name}
+Exec failed: ${String(err)}`);
+      return;
+    }
+    const { results, timedOut } = await pollTaskResults(
+      taskId,
+      effective.nodes,
+      effective.timeout
+    );
+    const entry = buildHistoryEntry(effective, taskId, results, timedOut);
+    appendHistorySync(entry);
+    if (isFailure(results)) {
+      const message = await buildFailureMessage(entry);
+      await notifyFailure(effective, message, effective.nodes);
+    } else {
+      console.log(`[crontask] task ${effective.id} round ${taskId} ok (${results.length} results)`);
+    }
+  }
+  function ensureExecutable(...paths) {
+    try {
+      const fs = __require("fs");
+      for (const p of paths) {
+        try {
+          fs.chmodSync(p, 493);
+        } catch {
+        }
+      }
+    } catch {
+    }
+  }
+  var sandboxProbeCache = null;
+  var sandboxProbePending = false;
+  function sandboxBins() {
+    const sandboxDir = `${__dirname}/sandbox`;
+    return {
+      bwrapBin: `${sandboxDir}/bin/bwrap`,
+      busyboxBin: `${sandboxDir}/bin/busybox`
+    };
+  }
+  async function probeSandboxCapability(force = false) {
+    if (sandboxProbeCache && !force) return sandboxProbeCache;
+    try {
+      const { bwrapBin, busyboxBin } = sandboxBins();
+      ensureExecutable(bwrapBin, busyboxBin);
+      const r = await spawnCS(
+        bwrapBin,
+        [
+          "--ro-bind",
+          "/",
+          "/",
+          "--dev",
+          "/dev",
+          "--proc",
+          "/proc",
+          "--unshare-net",
+          "--unshare-pid",
+          busyboxBin,
+          "true"
+        ],
+        { env: envSafe(), timeout: 15e3 }
+      );
+      sandboxProbeCache = r.exitCode === 0 ? { available: true, reason: "", checkedAt: (/* @__PURE__ */ new Date()).toISOString() } : {
+        available: false,
+        reason: (r.stderr || `bwrap exit ${r.exitCode}`).trim().slice(0, 160),
+        checkedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    } catch (err) {
+      sandboxProbeCache = {
+        available: false,
+        reason: String(err).slice(0, 160),
+        checkedAt: (/* @__PURE__ */ new Date()).toISOString()
+      };
+    }
+    sandboxProbePending = false;
+    console.log(
+      `[crontask] sandbox probe: available=${sandboxProbeCache.available}${sandboxProbeCache.reason ? ` (${sandboxProbeCache.reason})` : ""}`
+    );
+    return sandboxProbeCache;
+  }
+  function startProbeIfNeeded(force) {
+    if (sandboxProbePending || sandboxProbeCache && !force) return;
+    sandboxProbePending = true;
+    void probeSandboxCapability(force).catch(() => {
+      sandboxProbePending = false;
+    });
+  }
+  async function dispatchSandboxTask(effective) {
+    try {
+      const { bwrapBin, busyboxBin } = sandboxBins();
+      ensureExecutable(bwrapBin, busyboxBin);
+      const cap = await probeSandboxCapability();
+      let result;
+      let isolated = true;
+      if (cap.available) {
+        const bwrapArgs = [
+          "--ro-bind",
+          "/",
+          "/",
+          "--tmpfs",
+          "/tmp",
+          "--proc",
+          "/proc",
+          "--dev",
+          "/dev",
+          "--unshare-pid",
+          "--unshare-ipc",
+          "--unshare-uts"
+        ];
+        bwrapArgs.push(effective.sandboxNetwork ? "--share-net" : "--unshare-net");
+        bwrapArgs.unshift("--unshare-user-try");
+        result = await spawnCS(
+          bwrapBin,
+          [...bwrapArgs, busyboxBin, "sh", "-c", effective.sandboxCommand],
+          { env: envSafe(), timeout: effective.timeout * 1e3 }
+        );
+      } else if (effective.sandboxStrict) {
+        throw new Error(
+          `\u5F53\u524D\u73AF\u5883\u4E0D\u652F\u6301\u6C99\u7BB1\u9694\u79BB\uFF08${cap.reason}\uFF09\u3002\u89E3\u6CD5\uFF1A\u4EE5 --security-opt seccomp=unconfined \u6216 --privileged \u8FD0\u884C Komari \u5BB9\u5668\uFF0C\u6216\u5728\u88F8\u673A\u90E8\u7F72\uFF1B\u6216\u5728\u4EFB\u52A1\u4E2D\u6539\u7528\u5BBD\u677E\u6A21\u5F0F\uFF08\u9694\u79BB\u4E0D\u53EF\u7528\u65F6\u76F4\u63A5\u6267\u884C\uFF09`
+        );
+      } else {
+        isolated = false;
+        result = await spawnCS(busyboxBin, ["sh", "-c", effective.sandboxCommand], {
+          env: envSafe(),
+          timeout: effective.timeout * 1e3
+        });
+      }
+      const ok = result.exitCode === 0;
+      const prefix = isolated ? "" : "\u26A0\uFE0F \u9694\u79BB\u4E0D\u53EF\u7528\uFF0C\u672C\u6B21\u4E3A\u76F4\u63A5\u6267\u884C\uFF08\u975E\u6C99\u7BB1\uFF09\n";
+      const entry = buildSingleHistoryEntry(
+        effective,
+        ok ? isolated ? "\u6C99\u7BB1\u6267\u884C\u6210\u529F" : "\u6267\u884C\u6210\u529F\uFF08\u5BBD\u677E\u6A21\u5F0F\uFF0C\u65E0\u9694\u79BB\uFF09" : `\u6267\u884C\u5931\u8D25 (exit ${result.exitCode})`,
+        result.exitCode,
+        false,
+        ok,
+        (/* @__PURE__ */ new Date()).toISOString()
+      );
+      entry.detail = (prefix + result.stdout + result.stderr).slice(0, 1e3);
+      appendHistorySync(entry);
+      if (!ok) {
+        await notifyFailure(effective, `[Cron Task] ${effective.name}
+\u6C99\u7BB1\u547D\u4EE4\u9000\u51FA\u7801 ${result.exitCode}
+${entry.detail}`);
+      } else {
+        console.log(`[crontask] task ${effective.id} sandbox ok (isolated=${isolated})`);
+      }
+    } catch (err) {
+      await notifyFailure(effective, `[Cron Task] ${effective.name}
+\u6C99\u7BB1\u6267\u884C\u5931\u8D25: ${String(err)}`);
+      const entry = buildSingleHistoryEntry(effective, `\u6C99\u7BB1\u6267\u884C\u5931\u8D25: ${String(err)}`, -2, false, false, (/* @__PURE__ */ new Date()).toISOString());
+      appendHistorySync(entry);
+    }
+  }
+  async function spawnCS(command, args, options) {
+    const cp = __require("child_process");
+    return await new Promise((resolve, reject) => {
+      const child = cp.spawn(command, args, {
+        env: options.env,
+        stdio: ["ignore", "pipe", "pipe"]
+      });
+      let stdout = "", stderr = "";
+      child.stdout?.on("data", (d) => {
+        stdout += String(d ?? "");
+      });
+      child.stderr?.on("data", (d) => {
+        stderr += String(d ?? "");
+      });
+      const t = options.timeout ? setTimeout(() => {
+        try {
+          child.kill("SIGKILL");
+        } catch {
+        }
+        reject(new Error("sandbox timeout"));
+      }, options.timeout) : void 0;
+      child.on("error", (e) => {
+        if (t) clearTimeout(t);
+        reject(e);
+      });
+      child.on("close", (code) => {
+        if (t) clearTimeout(t);
+        resolve({ stdout, stderr, exitCode: code ?? -1 });
+      });
+    });
+  }
+  function envSafe() {
+    return {
+      PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+      LANG: "C.UTF-8"
+    };
+  }
+  async function dispatchActionTask(effective) {
+    const method = effective.actionMethod.trim();
+    let params;
+    try {
+      params = JSON.parse(effective.actionParams || "{}");
+    } catch {
+      await notifyFailure(effective, `[Cron Task] ${effective.name}
+Action \u53C2\u6570\u4E0D\u662F\u5408\u6CD5 JSON`);
+      return;
+    }
+    try {
+      const result = await import_plugin_sdk.server.call(method, params);
+      const summary = summarizeActionResult(result);
+      const entry = buildSingleHistoryEntry(
+        effective,
+        `\u8C03\u7528 ${method}\uFF1A${summary}`,
+        0,
+        false,
+        true,
+        (/* @__PURE__ */ new Date()).toISOString()
+      );
+      entry.detail = JSON.stringify(result ?? null).slice(0, 1e3);
+      appendHistorySync(entry);
+      console.log(`[crontask] task ${effective.id} action ${method} ok`);
+    } catch (err) {
+      const msg = `[Cron Task] ${effective.name}
+Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
+      await notifyFailure(effective, msg);
+      const entry = buildSingleHistoryEntry(
+        effective,
+        `\u8C03\u7528 ${method}\uFF1A\u5931\u8D25 - ${String(err)}`,
+        -1,
+        false,
+        false,
+        (/* @__PURE__ */ new Date()).toISOString()
+      );
+      appendHistorySync(entry);
+    }
+  }
+  function summarizeActionResult(result) {
+    if (result === null || result === void 0) return "\u6210\u529F";
+    if (typeof result === "string" || typeof result === "number" || typeof result === "boolean") {
+      return String(result).slice(0, 200);
+    }
+    if (Array.isArray(result)) return `${result.length} \u6761\u8BB0\u5F55`;
+    if (typeof result === "object") {
+      const entries = Object.entries(result);
+      const brief = entries.slice(0, 5).map(([k, v]) => {
+        if (v === null || v === void 0) return `${k}: null`;
+        if (typeof v === "object") return `${k}: ${Array.isArray(v) ? `[${v.length}]` : "{\u2026}"}`;
+        return `${k}: ${String(v).slice(0, 60)}`;
+      }).join(", ");
+      return entries.length > 5 ? brief + ", \u2026" : brief;
+    }
+    return String(result).slice(0, 200);
   }
   async function pollTaskResults(taskId, expectedClients, timeoutSeconds) {
     const deadline = Date.now() + timeoutSeconds * 1e3;
@@ -721,7 +1010,7 @@ Exec failed: ${String(err)}`,
       entry.timedOut ? "Status: timed out" : "Status: failed"
     ];
     for (const r of entry.results) {
-      const name = nodes.get(r.client)?.name ?? r.client;
+      const name = (r.client && nodes.get(r.client)?.name) ?? r.client ?? "server";
       lines.push(
         `\u2022 ${name} (exit ${r.exit_code}): ${previewResult(r.result) || "(no output)"}`
       );
@@ -808,8 +1097,8 @@ Exec failed: ${String(err)}`,
     const id = String(p.id ?? "");
     const task = loadTasksSync().find((t) => t.id === id);
     if (!task) return { ok: false, error: "Task not found" };
-    if (task.command === "" || task.nodes.length === 0) {
-      return { ok: false, error: "Task has no command or nodes" };
+    if (!isTaskExecutable(task)) {
+      return { ok: false, error: "Task is not executable" };
     }
     void dispatchTask(task);
     appendAuditSync({
@@ -832,6 +1121,15 @@ Exec failed: ${String(err)}`,
     const items = loadAuditSync();
     return { audit: items.slice(-limit).reverse() };
   }
+  function rpcSandboxStatus(params) {
+    const p = params ?? {};
+    const force = asBoolean(p.force, false);
+    startProbeIfNeeded(force);
+    return {
+      ...sandboxProbeCache ?? { available: false, reason: "", checkedAt: "" },
+      probing: sandboxProbePending
+    };
+  }
   (0, import_plugin_sdk.definePlugin)({
     async load() {
       const rpcs = [
@@ -841,7 +1139,8 @@ Exec failed: ${String(err)}`,
         ["crontask.setEnabled", (p) => rpcSetEnabled(p)],
         ["crontask.run", (p) => rpcRun(p)],
         ["crontask.history", (p) => rpcHistory(p)],
-        ["crontask.audit", (p) => rpcAudit(p)]
+        ["crontask.audit", (p) => rpcAudit(p)],
+        ["crontask.sandboxStatus", (p) => rpcSandboxStatus(p)]
       ];
       for (const [name, handler] of rpcs) {
         try {

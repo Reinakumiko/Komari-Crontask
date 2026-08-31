@@ -61,6 +61,18 @@
   .badge.warn { background: var(--warn-soft);    color: var(--warn); }
   .badge.on   { background: var(--success-soft); color: var(--success); }
   .badge.off  { background: #f1f5f9;             color: var(--faint); }
+  /* 沙箱环境状态条 */
+  .sbx-env { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin-bottom: 12px;
+             border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; font-size: 12.5px; }
+  .sbx-env .sbx-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+  .sbx-env .sbx-text { flex: 1; color: #334155; min-width: 0; }
+  .sbx-env.ok { border-color: var(--success); background: var(--success-soft); }
+  .sbx-env.ok .sbx-dot { background: var(--success); }
+  .sbx-env.fail { border-color: var(--danger); background: var(--danger-soft); }
+  .sbx-env.fail .sbx-dot { background: var(--danger); }
+  .sbx-reprobe { flex: none; border: 1px solid var(--border); background: #fff; border-radius: 7px;
+                 padding: 3px 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
+  .sbx-reprobe:hover { border-color: var(--primary); color: var(--primary); }
 
   .muted { color: var(--muted); }
   .mono  { font-family: var(--mono); }
@@ -501,10 +513,44 @@
       <div class="section">
         <h3>命令与目标</h3>
         <div class="field">
+          <label>执行目标</label>
+          <div class="exec-tabs" id="typeTabs">
+            <button type="button" data-t="command" class="active">远程命令</button>
+            <button type="button" data-t="sandbox">沙箱命令</button>
+          </div>
+        </div>
+        <div class="sbx-env" id="sbxEnv" style="display:none">
+          <span class="sbx-dot"></span>
+          <span class="sbx-text" id="sbxEnvText">检测沙箱环境…</span>
+          <button type="button" class="sbx-reprobe" id="btnReprobe">重新检测</button>
+        </div>
+        <div class="field" id="commandField">
           <label for="f_command">命令</label>
           <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令" required></textarea>
         </div>
-        <div class="field">
+        <div id="sandboxFields" style="display:none">
+          <div class="field">
+            <label for="f_sandbox_command">沙箱命令</label>
+            <textarea id="f_sandbox_command" class="term" placeholder="# 在 server 沙箱内执行（busybox sh）· 只读根 + 默认禁网"></textarea>
+          </div>
+          <div class="field">
+            <label class="opt-row">
+              <span class="opt-text">
+                <span class="opt-title">沙箱联网</span>
+                <span class="opt-desc">默认禁网；开启后命令可访问网络（仍在隔离内）</span>
+              </span>
+              <span class="switch"><input type="checkbox" id="f_sandbox_network"><span class="slider"></span></span>
+            </label>
+            <label class="opt-row">
+              <span class="opt-text">
+                <span class="opt-title">严格隔离</span>
+                <span class="opt-desc">环境不支持隔离时任务报错（默认）；关闭则降级为直接执行并在结果中标注</span>
+              </span>
+              <span class="switch"><input type="checkbox" id="f_sandbox_strict" checked><span class="slider"></span></span>
+            </label>
+          </div>
+        </div>
+        <div class="field" id="nodeField">
           <label>目标节点 <span class="hint" style="display:inline">已选 <b id="nodeCount">0</b> 个</span></label>
           <div class="node-picker">
             <div class="node-chips" id="nodeChips"><span class="placeholder">在下方搜索并勾选节点</span></div>
@@ -556,6 +602,19 @@
 <!-- 更新日志弹框 -->
 
 
+<!-- 风险操作确认弹框 -->
+<dialog id="confirmDialog">
+  <div class="dlg-head">
+    <h2 id="confirmTitle">确认执行</h2>
+    <button type="button" class="close" id="btnConfirmClose" aria-label="关闭">✕</button>
+  </div>
+  <div class="dlg-body" id="confirmBody"></div>
+  <div class="dlg-foot">
+    <button type="button" class="secondary" id="btnConfirmCancel">取消</button>
+    <button type="button" id="btnConfirmOk">确认执行</button>
+  </div>
+</dialog>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -564,6 +623,7 @@
 const $ = (id) => document.getElementById(id);
 let NODES = [];
 let selectedNodes = new Set();
+let targetType = "command"; // 执行目标: command(远程节点) | sandbox(server 沙箱)
 const dialog = $("taskDialog");
 
 // ---------- 通用 ----------
@@ -616,14 +676,17 @@ function nodePills(ids) {
   }).join("");
 }
 function taskRow(t) {
+  const isSbx = t.type === "sandbox";
   const status = t.enabled ? '<span class="badge on">启用</span>' : '<span class="badge off">停用</span>';
+  const typeChip = isSbx ? '<span class="badge warn">沙箱</span>' : "";
+  const cmd = isSbx ? t.sandboxCommand : t.command;
   const toggleBtn = t.enabled
     ? `<button data-act="toggle" class="btn-pause" title="停止定时触发">⏸ 停用</button>`
     : `<button data-act="toggle" class="btn-resume" title="恢复定时触发">▶ 启用</button>`;
   return `<tr data-id="${esc(t.id)}">
-    <td><div class="t-name">${esc(t.name)}</div><div class="t-cron">${esc(t.cron)}</div></td>
-    <td><span class="t-cmd" title="${esc(t.command)}">${esc(t.command)}</span></td>
-    <td>${nodePills(t.nodes)}</td>
+    <td><div class="t-name">${esc(t.name)} ${typeChip}</div><div class="t-cron">${esc(t.cron)}</div></td>
+    <td><span class="t-cmd" title="${esc(cmd)}">${esc(cmd)}</span></td>
+    <td>${isSbx ? '<span class="node-pill">本机沙箱</span>' : nodePills(t.nodes)}</td>
     <td>${status}</td>
     <td><div class="row-actions">
       <button data-act="run" class="btn-run" title="立即执行一次">▶ 执行</button>
@@ -971,6 +1034,10 @@ function openForm(task) {
   $("f_timeout").value = task?.timeout ?? 300;
   $("f_notify").checked = task ? !!task.notify : true;
   $("f_enabled").checked = task ? !!task.enabled : true;
+  $("f_sandbox_command").value = task?.sandboxCommand ?? "";
+  $("f_sandbox_network").checked = task ? !!task.sandboxNetwork : false;
+  $("f_sandbox_strict").checked = task ? task.sandboxStrict !== false : true;
+  setType(task?.type === "sandbox" ? "sandbox" : "command");
   selectedNodes = new Set(task?.nodes ?? []);
   $("nodeFilter").value = "";
   renderNodePicker();
@@ -978,20 +1045,135 @@ function openForm(task) {
   $("f_name").focus();
 }
 function closeForm() { dialog.close(); }
+// ---------- 执行目标切换 + 沙箱环境状态 ----------
+function setType(t) {
+  targetType = t;
+  [...$("typeTabs").children].forEach((b) => b.classList.toggle("active", b.dataset.t === t));
+  const isCmd = t === "command";
+  $("commandField").style.display = isCmd ? "" : "none";
+  $("nodeField").style.display = isCmd ? "" : "none";
+  $("sandboxFields").style.display = isCmd ? "none" : "";
+  $("f_command").required = isCmd;
+  $("f_sandbox_command").required = !isCmd;
+  $("sbxEnv").style.display = isCmd ? "none" : "flex";
+  if (!isCmd) loadSandboxEnv(false);
+}
+async function loadSandboxEnv(force) {
+  const box = $("sbxEnv");
+  box.classList.remove("ok", "fail");
+  $("sbxEnvText").textContent = "检测沙箱环境…";
+  try {
+    let st = await rpc("crontask.sandboxStatus", { force: !!force });
+    if (st.probing) {
+      await new Promise((r) => setTimeout(r, 1200));
+      st = await rpc("crontask.sandboxStatus", {});
+    }
+    if (st.available) {
+      box.classList.add("ok");
+      $("sbxEnvText").textContent = "沙箱隔离可用（只读根 + 默认禁网 + 进程隔离）";
+    } else {
+      box.classList.add("fail");
+      $("sbxEnvText").textContent = "当前环境不支持隔离" + (st.reason ? `（${st.reason}）` : "")
+        + " · 严格模式下任务将失败，可关闭「严格隔离」降级直接执行";
+    }
+  } catch (e2) {
+    box.classList.add("fail");
+    $("sbxEnvText").textContent = "沙箱环境检测失败: " + e2.message;
+  }
+}
+/** 危险命令识别：命中返回 null 表示安全；返回字符串表示风险类型 */
+const DANGEROUS_PATTERNS = [
+  { re: /rm\s+(-[^ ]*\s+)*\/?[^ ]*\/\s*$|rm\s+-rf|rm\s+-fr|rm\s+-R/, tag: "删除操作 (rm)" },
+  { re: /mkfs|fdisk|parted/, tag: "磁盘格式化 (mkfs/fdisk)" },
+  { re: /\bdd\b/, tag: "磁盘写入 (dd)" },
+  { re: /shutdown|reboot|halt|poweroff|init\s+[06]/, tag: "关机/重启" },
+  { re: /\(\)\s*\{\s*:/, tag: "fork 炸弹" },
+  { re: /chmod\s+4777|chmod\s+[0-7]777/, tag: "提权文件权限" },
+  { re: /kill\s+-9\s+0|pkill\s+-9/, tag: "强制结束进程" },
+  { re: /iptables\s+-F|ufw\s+disable|selinux\s+0/, tag: "防火墙/安全关闭" },
+  { re: /curl[^|&]*\|\s*(ba)?sh|wget[^|&]*\|\s*(ba)?sh/, tag: "管道到 shell 执行" },
+];
+function detectDanger(command) {
+  const s = String(command || "").toLowerCase();
+  for (const p of DANGEROUS_PATTERNS) {
+    if (p.re.test(s)) return p.tag;
+  }
+  return null;
+}
+
+/** 弹出风险确认。resolve(true) 表示用户确认，resolve(false) 取消 */
+function confirmDanger({ title, message, danger, okLabel = "确认执行" }) {
+  return new Promise((resolve) => {
+    $("confirmTitle").textContent = title;
+    $("btnConfirmOk").textContent = okLabel;
+    $("confirmBody").innerHTML = message;
+    $("confirmDialog").showModal();
+    const okBtn = $("btnConfirmOk");
+    const done = (val) => {
+      $("btnConfirmClose").removeEventListener("click", onClickCancel);
+      $("btnConfirmCancel").removeEventListener("click", onClickCancel);
+      okBtn.removeEventListener("click", onClickOk);
+      $("confirmDialog").removeEventListener("cancel", onEsc);
+      $("confirmDialog").close();
+      resolve(val);
+    };
+    const onClickOk = () => done(true);
+    const onClickCancel = () => done(false);
+    const onEsc = (e) => { e.preventDefault(); done(false); };
+    okBtn.addEventListener("click", onClickOk);
+    $("btnConfirmCancel").addEventListener("click", onClickCancel);
+    $("btnConfirmClose").addEventListener("click", onClickCancel);
+    $("confirmDialog").addEventListener("cancel", onEsc);
+  });
+}
+
+/** 转义 HTML（供确认框展示命令预览） */
+function escHtml(s) { return esc(s); }
+
 async function saveForm(e) {
   e.preventDefault();
-  if (!selectedNodes.size) { toast("请至少选择一个目标节点"); return; }
+  if (targetType === "command" && !selectedNodes.size) { toast("请至少选择一个目标节点"); return; }
+  if (targetType === "sandbox" && !$("f_sandbox_command").value.trim()) { toast("请填写沙箱命令"); return; }
+
   const payload = {
     id: $("f_id").value,
     name: $("f_name").value.trim(),
     cron: buildCronExpr(),
-    command: $("f_command").value,
-    nodes: [...selectedNodes],
+    type: targetType,
+    command: targetType === "command" ? $("f_command").value : "",
+    nodes: targetType === "command" ? [...selectedNodes] : [],
+    sandboxCommand: targetType === "sandbox" ? $("f_sandbox_command").value : "",
+    sandboxNetwork: targetType === "sandbox" ? $("f_sandbox_network").checked : false,
+    sandboxStrict: targetType === "sandbox" ? $("f_sandbox_strict").checked : true,
     timeout: Number($("f_timeout").value || 300),
     notify: $("f_notify").checked,
     enabled: $("f_enabled").checked,
     _operator: CURRENT_USER,
   };
+
+  // 风险确认：命令模式保存前检查危险命令
+  if (targetType === "command") {
+    const danger = detectDanger(payload.command);
+    const nodeCount = payload.nodes.length;
+    const preview = `<pre class="h-out" style="margin:8px 0">${escHtml(payload.command)}</pre>`;
+    let message;
+    if (danger) {
+      message = `<div style="margin-bottom:8px;color:var(--danger);font-weight:600;font-size:14px">⚠️ 检测到危险操作：${escHtml(danger)}</div>
+        <div class="muted" style="margin-bottom:6px">此命令将在 <b>${nodeCount}</b> 个节点上执行，可能造成不可逆影响：</div>
+        ${preview}
+        <div class="muted">请确认你了解该命令的风险并继续。</div>`;
+    } else {
+      message = `<div style="margin-bottom:6px">将在 <b>${nodeCount}</b> 个节点上执行以下命令：</div>${preview}
+        <div class="muted">点击「确认执行」保存并立即生效。</div>`;
+    }
+    const ok = await confirmDanger({
+      title: danger ? "危险操作确认" : "确认保存任务",
+      message,
+      danger: !!danger,
+    });
+    if (!ok) return;
+  }
+
   try {
     const r = await rpc("crontask.save", payload);
     if (!r.ok) throw new Error(r.error);
@@ -1061,9 +1243,10 @@ function nodeResultBlock(r) {
 }
 function historyItem(h, open) {
   const failed = h.results.some((r) => r.exit_code !== 0);
-  const verdict = h.timedOut
+  const verdict = (h.timedOut
     ? '<span class="badge warn">超时</span>'
-    : failed ? '<span class="badge fail">失败</span>' : '<span class="badge ok">成功</span>';
+    : failed ? '<span class="badge fail">失败</span>' : '<span class="badge ok">成功</span>')
+    + (h.type === "sandbox" ? ' <span class="badge warn">沙箱</span>' : "");
   const absTime = new Date(h.ts).toLocaleString();
   const results = h.results.length
     ? h.results.map(nodeResultBlock).join("")
@@ -1077,6 +1260,7 @@ function historyItem(h, open) {
     </div>
     <div class="h-body" ${open ? "" : "hidden"}>
       <div class="h-cmd" title="${esc(h.command)}">${esc(h.command)}</div>
+      ${h.detail ? `<div class="h-out">${esc(h.detail)}</div>` : ""}
       ${results}
     </div>
   </div>`;
@@ -1154,6 +1338,11 @@ $("btnCollapseAll").addEventListener("click", () => {
 
 // ---------- 初始化 ----------
 $("btnNew").addEventListener("click", () => openForm(null));
+$("typeTabs").addEventListener("click", (e) => {
+  const btn = e.target.closest("button[data-t]");
+  if (btn) setType(btn.dataset.t);
+});
+$("btnReprobe").addEventListener("click", () => loadSandboxEnv(true));
 $("btnClose").addEventListener("click", closeForm);
 $("btnCancel").addEventListener("click", closeForm);
 $("btnRefresh").addEventListener("click", () => { refreshTasks(); refreshHistory(); refreshAudit(); });

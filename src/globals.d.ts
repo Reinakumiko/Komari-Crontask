@@ -15,3 +15,5 @@ declare function setTimeout(
 ): unknown;
 
 declare function clearTimeout(handle: unknown): void;
+/** 插件目录（jsruntime 注入，指向 data/plugin/<short>）。 */
+declare const __dirname: string;

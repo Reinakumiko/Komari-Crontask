@@ -5,6 +5,7 @@ import {
   type TaskResult,
   asBoolean,
   buildHistoryEntry,
+  buildSingleHistoryEntry,
   isFailure,
   normalizeCronExpression,
   previewResult,
@@ -87,7 +88,13 @@ function loadTasksSync(): Task[] {
 }
 
 function loadHistorySync(): HistoryEntry[] {
-  return readJsonFileSync<HistoryEntry[]>(HISTORY_FILE, []);
+  const items = readJsonFileSync<HistoryEntry[]>(HISTORY_FILE, []);
+  // 兼容旧记录：补齐缺失字段
+  return items.map((it) => ({
+    ...it,
+    type: it.type ?? "command",
+    results: it.results ?? [],
+  }));
 }
 
 function loadAuditSync(): AuditEntry[] {
@@ -150,7 +157,7 @@ function dispatchByExpression(expr: string): Promise<unknown[]> {
   for (const task of loadTasksSync()) {
     if (!task.enabled) continue;
     if (normalizeCronExpression(task.cron) !== expr) continue;
-    if (task.command === "" || task.nodes.length === 0) continue;
+    if (!isTaskExecutable(task)) continue;
     pending.push(dispatchTask(task));
   }
   return Promise.all(pending);
@@ -199,6 +206,34 @@ async function nodeInfoMap(): Promise<Map<string, NodeInfo>> {
  * Dispatches one task round: exec -> poll -> settle -> notify -> history.
  * Concurrent rounds for the same task are dropped.
  */
+/** 判断任务可执行（按类型） */
+function isTaskExecutable(t: Task): boolean {
+  switch (t.type) {
+    case "command": return t.command !== "" && t.nodes.length > 0;
+    case "sandbox": return t.sandboxCommand !== "";
+    case "action": return t.actionMethod !== "";
+    default: return false;
+  }
+}
+
+/** 执行后的统一失败通知 */
+async function notifyFailure(task: Task, message: string, clients?: string[]): Promise<void> {
+  if (!task.notify) return;
+  try {
+    await server.call("admin:sendNotification", {
+      event: {
+        event: "TaskFailed",
+        message,
+        emoji: "⚠️",
+        time: new Date().toISOString(),
+        ...(clients?.length ? { clients: clients.map((uuid) => ({ uuid })) } : {}),
+      },
+    });
+  } catch (e) {
+    console.log(`[crontask] notify failed: ${String(e)}`);
+  }
+}
+
 async function dispatchTask(task: Task): Promise<void> {
   // Lock synchronously BEFORE the first await so concurrent fires are dropped
   // deterministically (the in-flight check must not race with async storage I/O).
@@ -210,60 +245,294 @@ async function dispatchTask(task: Task): Promise<void> {
   try {
     // Use the freshest persisted copy so an edit made after registration wins.
     const effective = loadTasksSync().find((t) => t.id === task.id) ?? task;
-    if (effective.command === "" || effective.nodes.length === 0) {
-      console.log(`[crontask] task ${task.id} empty command or no nodes, skipping`);
+    if (!isTaskExecutable(effective)) {
+      console.log(`[crontask] task ${task.id} not executable (type=${effective.type}), skipping`);
       return;
     }
 
-    let taskId: string;
-    try {
-      const summary = await server.call("admin:exec", {
-        command: effective.command,
-        clients: effective.nodes,
-      });
-      taskId = summary.task_id;
-    } catch (err) {
-      console.log(`[crontask] task ${task.id} exec failed: ${String(err)}`);
-      if (effective.notify) {
-        await server.call("admin:sendNotification", {
-          event: {
-            event: "TaskFailed",
-            message: `[Cron Task] ${effective.name}\nExec failed: ${String(err)}`,
-            emoji: "⚠️",
-            time: new Date().toISOString(),
-          },
-        });
-      }
-      return;
-    }
-
-    const { results, timedOut } = await pollTaskResults(
-      taskId,
-      effective.nodes,
-      effective.timeout,
-    );
-    const entry = buildHistoryEntry(effective, taskId, results, timedOut);
-    appendHistorySync(entry);
-
-    if (isFailure(results) && effective.notify) {
-      const message = await buildFailureMessage(entry);
-      await server.call("admin:sendNotification", {
-        event: {
-          event: "TaskFailed",
-          message,
-          emoji: "⚠️",
-          time: entry.ts,
-          clients: effective.nodes.map((uuid) => ({ uuid })),
-        },
-      });
-    } else {
-      console.log(
-        `[crontask] task ${task.id} round ${taskId} ok (${results.length} results)`,
-      );
+    switch (effective.type) {
+      case "sandbox":
+        await dispatchSandboxTask(effective);
+        break;
+      case "action":
+        await dispatchActionTask(effective);
+        break;
+      default:
+        await dispatchRemoteTask(effective);
     }
   } finally {
     inFlight.delete(task.id);
   }
+}
+
+/** command：远程节点执行 */
+async function dispatchRemoteTask(effective: Task): Promise<void> {
+  let taskId: string;
+  try {
+    const summary = await server.call("admin:exec", {
+      command: effective.command,
+      clients: effective.nodes,
+    });
+    taskId = summary.task_id;
+  } catch (err) {
+    console.log(`[crontask] task ${effective.id} exec failed: ${String(err)}`);
+    await notifyFailure(effective, `[Cron Task] ${effective.name}\nExec failed: ${String(err)}`);
+    return;
+  }
+
+  const { results, timedOut } = await pollTaskResults(
+    taskId,
+    effective.nodes,
+    effective.timeout,
+  );
+  const entry = buildHistoryEntry(effective, taskId, results, timedOut);
+  appendHistorySync(entry);
+
+  if (isFailure(results)) {
+    const message = await buildFailureMessage(entry);
+    await notifyFailure(effective, message, effective.nodes);
+  } else {
+    console.log(`[crontask] task ${effective.id} round ${taskId} ok (${results.length} results)`);
+  }
+}
+
+/**
+ * sandbox：在插件自带的隔离沙箱（bwrap + busybox，全静态二进制）里执行命令。
+ * 默认禁网 + 只读根 + 无权限；联网由任务配置打开（仍受沙箱隔离）。
+ * 环境不支持命名空间时：严格模式报错（默认）/ 宽松模式降级直接执行。
+ */
+/** 确保沙箱二进制可执行（ZIP 解压可能丢执行位） */
+function ensureExecutable(...paths: string[]): void {
+  try {
+    const fs: any = require("fs");
+    for (const p of paths) {
+      try { fs.chmodSync(p, 0o755); } catch { /* ignore */ }
+    }
+  } catch { /* ignore */ }
+}
+
+type SandboxCapability = { available: boolean; reason: string; checkedAt: string };
+let sandboxProbeCache: SandboxCapability | null = null;
+let sandboxProbePending = false;
+
+function sandboxBins(): { bwrapBin: string; busyboxBin: string } {
+  const sandboxDir = `${__dirname}/sandbox`;
+  return {
+    bwrapBin: `${sandboxDir}/bin/bwrap`,
+    busyboxBin: `${sandboxDir}/bin/busybox`,
+  };
+}
+
+/** 探测当前环境能否创建命名空间（bwrap 试运行 busybox true，结果缓存；内部自兜底，永不 reject） */
+async function probeSandboxCapability(force = false): Promise<SandboxCapability> {
+  if (sandboxProbeCache && !force) return sandboxProbeCache;
+  try {
+    const { bwrapBin, busyboxBin } = sandboxBins();
+    ensureExecutable(bwrapBin, busyboxBin);
+    const r = await spawnCS(
+      bwrapBin,
+      [
+        "--ro-bind", "/", "/",
+        "--dev", "/dev",
+        "--proc", "/proc",
+        "--unshare-net",
+        "--unshare-pid",
+        busyboxBin, "true",
+      ],
+      { env: envSafe(), timeout: 15000 },
+    );
+    sandboxProbeCache =
+      r.exitCode === 0
+        ? { available: true, reason: "", checkedAt: new Date().toISOString() }
+        : {
+            available: false,
+            reason: (r.stderr || `bwrap exit ${r.exitCode}`).trim().slice(0, 160),
+            checkedAt: new Date().toISOString(),
+          };
+  } catch (err) {
+    sandboxProbeCache = {
+      available: false,
+      reason: String(err).slice(0, 160),
+      checkedAt: new Date().toISOString(),
+    };
+  }
+  sandboxProbePending = false;
+  console.log(
+    `[crontask] sandbox probe: available=${sandboxProbeCache.available}${sandboxProbeCache.reason ? ` (${sandboxProbeCache.reason})` : ""}`,
+  );
+  return sandboxProbeCache;
+}
+
+/** 无缓存时后台探测，立即返回缓存（probing=true 表示探测进行中） */
+function startProbeIfNeeded(force: boolean): void {
+  if (sandboxProbePending || (sandboxProbeCache && !force)) return;
+  sandboxProbePending = true;
+  void probeSandboxCapability(force).catch(() => { sandboxProbePending = false; });
+}
+
+async function dispatchSandboxTask(effective: Task): Promise<void> {
+  try {
+    const { bwrapBin, busyboxBin } = sandboxBins();
+    ensureExecutable(bwrapBin, busyboxBin);
+    const cap = await probeSandboxCapability();
+    let result: { stdout: string; stderr: string; exitCode: number };
+    let isolated = true;
+
+    if (cap.available) {
+      // bwrap 参数：只读根文件系统 / 临时 tmpfs / proc / dev；默认禁网
+      const bwrapArgs = [
+        "--ro-bind", "/", "/",
+        "--tmpfs", "/tmp",
+        "--proc", "/proc",
+        "--dev", "/dev",
+        "--unshare-pid",
+        "--unshare-ipc",
+        "--unshare-uts",
+      ];
+      bwrapArgs.push(effective.sandboxNetwork ? "--share-net" : "--unshare-net");
+      // 用户空间名字空间（无需 root），失败自动回退（某些宿主禁止非特权 userns）
+      bwrapArgs.unshift("--unshare-user-try");
+      result = await spawnCS(
+        bwrapBin,
+        [...bwrapArgs, busyboxBin, "sh", "-c", effective.sandboxCommand],
+        { env: envSafe(), timeout: effective.timeout * 1000 },
+      );
+    } else if (effective.sandboxStrict) {
+      throw new Error(
+        `当前环境不支持沙箱隔离（${cap.reason}）。` +
+          `解法：以 --security-opt seccomp=unconfined 或 --privileged 运行 Komari 容器，或在裸机部署；` +
+          `或在任务中改用宽松模式（隔离不可用时直接执行）`,
+      );
+    } else {
+      // 宽松模式：无隔离直接执行，输出前加显著警告
+      isolated = false;
+      result = await spawnCS(busyboxBin, ["sh", "-c", effective.sandboxCommand], {
+        env: envSafe(),
+        timeout: effective.timeout * 1000,
+      });
+    }
+
+    const ok = result.exitCode === 0;
+    const prefix = isolated ? "" : "⚠️ 隔离不可用，本次为直接执行（非沙箱）\n";
+    const entry = buildSingleHistoryEntry(
+      effective,
+      ok
+        ? isolated ? "沙箱执行成功" : "执行成功（宽松模式，无隔离）"
+        : `执行失败 (exit ${result.exitCode})`,
+      result.exitCode,
+      false,
+      ok,
+      new Date().toISOString(),
+    );
+    entry.detail = (prefix + result.stdout + result.stderr).slice(0, 1000);
+    appendHistorySync(entry);
+    if (!ok) {
+      await notifyFailure(effective, `[Cron Task] ${effective.name}\n沙箱命令退出码 ${result.exitCode}\n${entry.detail}`);
+    } else {
+      console.log(`[crontask] task ${effective.id} sandbox ok (isolated=${isolated})`);
+    }
+  } catch (err) {
+    await notifyFailure(effective, `[Cron Task] ${effective.name}\n沙箱执行失败: ${String(err)}`);
+    const entry = buildSingleHistoryEntry(effective, `沙箱执行失败: ${String(err)}`, -2, false, false, new Date().toISOString());
+    appendHistorySync(entry);
+  }
+}
+
+/** child_process 执行封装：返回 {stdout, stderr, exitCode} */
+async function spawnCS(command: string, args: string[], options: {
+  env?: Record<string, string | undefined>;
+  timeout?: number;
+}): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const cp: any = require("child_process");
+  return await new Promise((resolve, reject) => {
+    const child: any = cp.spawn(command, args, {
+      env: options.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "", stderr = "";
+    child.stdout?.on("data", (d: unknown) => { stdout += String(d ?? ""); });
+    child.stderr?.on("data", (d: unknown) => { stderr += String(d ?? ""); });
+    const t = options.timeout
+      ? setTimeout(() => {
+          try { child.kill("SIGKILL"); } catch { /* ignore */ }
+          reject(new Error("sandbox timeout"));
+        }, options.timeout)
+      : undefined;
+    child.on("error", (e: Error) => { if (t) clearTimeout(t); reject(e); });
+    child.on("close", (code: number | null | undefined) => {
+      if (t) clearTimeout(t);
+      resolve({ stdout, stderr, exitCode: code ?? -1 });
+    });
+  });
+}
+
+/** 保留 PATH/常用变量，避免宿主环境变量泄露 */
+function envSafe(): Record<string, string | undefined> {
+  return {
+    PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+    LANG: "C.UTF-8",
+  };
+}
+
+/**
+ * action：调用 Komari 系统 RPC 执行。
+ * 参数 actionParams 为 JSON 字符串；返回值（或错误）作为单条结果写入历史。
+ */
+async function dispatchActionTask(effective: Task): Promise<void> {
+  const method = effective.actionMethod.trim();
+  let params: unknown;
+  try {
+    params = JSON.parse(effective.actionParams || "{}");
+  } catch {
+    await notifyFailure(effective, `[Cron Task] ${effective.name}\nAction 参数不是合法 JSON`);
+    return;
+  }
+  try {
+    const result = await server.call(method, params);
+    const summary = summarizeActionResult(result);
+    const entry = buildSingleHistoryEntry(
+      effective,
+      `调用 ${method}：${summary}`,
+      0,
+      false,
+      true,
+      new Date().toISOString(),
+    );
+    entry.detail = JSON.stringify(result ?? null).slice(0, 1000);
+    appendHistorySync(entry);
+    console.log(`[crontask] task ${effective.id} action ${method} ok`);
+  } catch (err) {
+    const msg = `[Cron Task] ${effective.name}\nAction ${method} 调用失败: ${String(err)}`;
+    await notifyFailure(effective, msg);
+    const entry = buildSingleHistoryEntry(
+      effective,
+      `调用 ${method}：失败 - ${String(err)}`,
+      -1,
+      false,
+      false,
+      new Date().toISOString(),
+    );
+    appendHistorySync(entry);
+  }
+}
+
+/** 将任意 RPC 返回值转成简短摘要（对象取大小/首键，避免超长） */
+function summarizeActionResult(result: unknown): string {
+  if (result === null || result === undefined) return "成功";
+  if (typeof result === "string" || typeof result === "number" || typeof result === "boolean") {
+    return String(result).slice(0, 200);
+  }
+  if (Array.isArray(result)) return `${result.length} 条记录`;
+  if (typeof result === "object") {
+    const entries = Object.entries(result as Record<string, unknown>);
+    const brief = entries.slice(0, 5).map(([k, v]) => {
+      if (v === null || v === undefined) return `${k}: null`;
+      if (typeof v === "object") return `${k}: ${Array.isArray(v) ? `[${(v as unknown[]).length}]` : "{…}"}`;
+      return `${k}: ${String(v).slice(0, 60)}`;
+    }).join(", ");
+    return entries.length > 5 ? brief + ", …" : brief;
+  }
+  return String(result).slice(0, 200);
 }
 
 /**
@@ -314,7 +583,7 @@ async function buildFailureMessage(entry: HistoryEntry): Promise<string> {
     entry.timedOut ? "Status: timed out" : "Status: failed",
   ];
   for (const r of entry.results) {
-    const name = nodes.get(r.client)?.name ?? r.client;
+    const name = (r.client && nodes.get(r.client)?.name) ?? r.client ?? "server";
     lines.push(
       `• ${name} (exit ${r.exit_code}): ${previewResult(r.result) || "(no output)"}`,
     );
@@ -417,8 +686,8 @@ function rpcRun(params: unknown): { ok: boolean; error?: string } {
   const id = String(p.id ?? "");
   const task = loadTasksSync().find((t) => t.id === id);
   if (!task) return { ok: false, error: "Task not found" };
-  if (task.command === "" || task.nodes.length === 0) {
-    return { ok: false, error: "Task has no command or nodes" };
+  if (!isTaskExecutable(task)) {
+    return { ok: false, error: "Task is not executable" };
   }
   void dispatchTask(task);
   appendAuditSync({
@@ -446,6 +715,17 @@ function rpcAudit(params: unknown): { audit: AuditEntry[] } {
   return { audit: items.slice(-limit).reverse() };
 }
 
+/** crontask.sandboxStatus -> 沙箱环境探测结果（force=true 重新探测；probing=true 表示探测进行中） */
+function rpcSandboxStatus(params: unknown): SandboxCapability & { probing: boolean } {
+  const p = (params ?? {}) as Record<string, unknown>;
+  const force = asBoolean(p.force, false);
+  startProbeIfNeeded(force);
+  return {
+    ...(sandboxProbeCache ?? { available: false, reason: "", checkedAt: "" }),
+    probing: sandboxProbePending,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Plugin lifecycle
 // ---------------------------------------------------------------------------
@@ -463,6 +743,7 @@ definePlugin({
       ["crontask.run", (p) => rpcRun(p)],
       ["crontask.history", (p) => rpcHistory(p)],
       ["crontask.audit", (p) => rpcAudit(p)],
+      ["crontask.sandboxStatus", (p) => rpcSandboxStatus(p)],
     ];
     for (const [name, handler] of rpcs) {
       try {

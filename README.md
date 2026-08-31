@@ -1,6 +1,6 @@
 # Komari Cron Task（定时任务）
 
-按 cron 计划在选定节点上定时执行 shell 命令，回收每个节点的执行结果，失败时通过 Komari 已配置的通知渠道发送告警。适用于定时备份、健康巡检、日志轮转、证书续期等运维自动化场景。
+按 cron 计划定时执行任务，支持两类执行目标：**远程节点命令**（经 agent 下发）与 **Server 本机沙箱命令**（bubblewrap 隔离：只读根 + 默认禁网 + 进程隔离）。自动回收执行结果与退出码，失败时通过 Komari 已配置的通知渠道发送告警。适用于定时备份、健康巡检、日志轮转、证书续期等运维自动化场景。
 
 > 需要 Komari ≥ 1.4.3（依赖 `server.cron` 插件调度 API 与 `admin:exec` 远程执行 RPC）。
 >
@@ -15,6 +15,10 @@
   - 手动触发（立即执行一次）
   - 执行历史：每次运行的命令、节点输出、退出码、耗时、超时标记（最新在前，保留最近 200 条）
 - **cron 表达式**：支持 5 字段（`分 时 日 月 周`）、6 字段（含秒）以及 `@every 1m` 固定间隔写法，按服务器本地时区执行
+- **沙箱命令**：在 Server 本机的隔离沙箱（插件内置**全静态** bubblewrap + busybox，无 glibc/musl 环境差异）中执行命令——只读根文件系统、独立 PID/IPC/UTS 命名空间、默认禁网
+  - 环境自检：管理页实时显示当前环境是否支持隔离（privileged 容器/裸机可用；Docker 默认 seccomp 策略下不可用，并给出解法提示）
+  - 严格/宽松模式：隔离不可用时默认**报错保护**；也可按任务切换为「宽松」降级直接执行，结果中显著标注 ⚠️ 未隔离
+  - 联网开关：默认禁网（DNS 均不可解析），按任务允许联网（仍在隔离内）
 - **结果回收**：通过系统远程执行任务（`admin:exec`）下发命令，轮询回收每个节点的输出与退出码
 - **失败告警**：任一节点退出码非 0、或全部节点离线时，通过已配置的通知渠道（Telegram / 邮件 / webhook 等）发送任务名、节点、退出码与输出预览
 - **执行历史**：最近 200 轮执行记录保存在插件数据目录（`data/plugin-data/crontask/history.json`），升级插件不丢失
@@ -23,8 +27,8 @@
 
 ## 安装
 
-1. 在 Komari 后台「插件」页面通过插件市场或本仓库 Release 上传 `crontask-0.3.0.zip`
-2. 批准权限：插件声明 `allowSystemRPC`（调用系统 RPC）与 `node`（持久化存储）两项能力
+1. 在 Komari 后台「插件」页面通过插件市场或本仓库 Release 上传 `crontask-0.5.0.zip`
+2. 批准权限：插件声明 `allowSystemRPC`（调用系统 RPC）、`node`（持久化存储）与 `allowExec`（沙箱本机执行）三项能力
 3. 在 Komari 侧边栏进入「定时任务」页面，新建任务并填写参数
 
 ## 管理页面配置项
@@ -81,6 +85,7 @@ npm run pack        # 产出 dist/crontask-0.3.0.zip
 
 - **`allowSystemRPC`**：必需。用于调用 `admin:exec`（下发命令）、`admin:getTaskResultsByTaskId`（回收结果）、`admin:sendNotification`（失败告警），以及插件的管理 RPC（`crontask.*`，默认 admin 角色可调）
 - **`node`**：必需。用于访问 `__storageDir__` 持久化任务与执行历史。该权限为运行时设置，不参与管理员审批
+- **`allowExec`**：沙箱命令需要。仅在 Server 本机执行插件自带的 bubblewrap/busybox（全静态二进制、命名空间隔离），远程节点命令不经过此项
 
 插件不声明、不使用高危的 `allowExec`（本机 shell）或 `allowAllFileAccess`；命令在目标节点上由 agent 执行，插件本身不做任何命令拼接。
 

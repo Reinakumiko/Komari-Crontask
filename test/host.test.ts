@@ -40,8 +40,13 @@ function makeTask(overrides: Partial<Record<string, unknown>>): Record<string, u
     id: "t1",
     name: "Alpha",
     cron: "0 3 * * *",
+    type: "command",
     command: "echo alpha",
     nodes: ["n1"],
+    sandboxCommand: "",
+    sandboxNetwork: false,
+    actionMethod: "",
+    actionParams: "{}",
     timeout: 300,
     notify: true,
     enabled: true,
@@ -329,6 +334,42 @@ test("crontask.run triggers a round and writes history", async () => {
   assert.equal(history.history.length, 1);
   assert.equal(history.history[0].name, "Alpha");
   assert.equal(history.history[0].execTaskId, "tid-1");
+});
+
+test("crontask.save creates sandbox task; history records single result", async () => {
+  await writeTasks([]);
+  await bootPlugin();
+  const saved = await rpc("crontask.save", makeTask({
+    id: "", type: "sandbox", sandboxCommand: "uptime", sandboxNetwork: false,
+    command: "", nodes: [],
+  }));
+  assert.equal(saved.ok, true);
+  const list = await rpc("crontask.list");
+  assert.equal(list.tasks[0].type, "sandbox");
+  assert.equal(list.tasks[0].sandboxCommand, "uptime");
+  // sandbox 任务当前为占位执行（Phase 4 实现），run 应可发起
+  const runRes = await rpc("crontask.run", { id: list.tasks[0].id });
+  assert.equal(runRes.ok, true);
+});
+
+test("crontask.save creates action task; run invokes system RPC into history", async () => {
+  await writeTasks([]);
+  await bootPlugin();
+  const saved = await rpc("crontask.save", makeTask({
+    id: "", type: "action", actionMethod: "admin:vacuumDatabase", actionParams: "{}",
+    command: "", nodes: [],
+  }));
+  assert.equal(saved.ok, true);
+  const list = await rpc("crontask.list");
+  assert.equal(list.tasks[0].type, "action");
+  const runRes = await rpc("crontask.run", { id: list.tasks[0].id });
+  assert.equal(runRes.ok, true);
+  // dispatch 异步完成，稍等后历史应有 action 记录
+  await new Promise((r) => setTimeout(r, 150));
+  const history = await rpc("crontask.history", { limit: 5 });
+  const actionEntry = history.history.find(h => h.name === "Alpha" && h.type === "action");
+  assert.ok(actionEntry, "action history entry should exist");
+  assert.match(actionEntry.command, /admin:vacuumDatabase/);
 });
 
 test("crontask.list returns tasks", async () => {

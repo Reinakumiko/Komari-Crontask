@@ -11,25 +11,49 @@ export type TaskResult = {
   finished_at?: string;
 };
 
+/** 单次执行结果（统一形状：command 有节点结果，sandbox/action 单条） */
+export type ActionResult = {
+  client?: string;
+  result: string;
+  exit_code: number | null;
+};
+
 /** One settled execution round. */
 export type HistoryEntry = {
   ts: string;
   taskId: string; // crontask task id
   name: string;
-  command: string;
-  nodes: string[];
-  execTaskId: string; // system task_id from admin:exec
+  type: TaskType;
+  command: string; // 实际执行的命令/method 描述
+  nodes?: string[];       // command 类型：目标节点
+  execTaskId?: string;    // command 类型：系统 task_id
   timedOut: boolean;
-  results: Array<{ client: string; result: string; exit_code: number | null }>;
+  ok?: boolean;           // 是否成功（sandbox/action 简单判定）
+  detail?: string;        // sandbox/action：单条结果摘要
+  results: ActionResult[];
 };
 
 /** A user-defined cron task. */
+/** 执行目标类型 */
+export type TaskType = "command" | "sandbox" | "action";
+
 export type Task = {
   id: string;
   name: string;
   cron: string;
+  /** 执行目标: command(远程节点) | sandbox(server隔离环境) | action(Komari功能) */
+  type: TaskType;
+  /** command: 远程命令 + 目标节点 */
   command: string;
   nodes: string[];
+  /** sandbox: server 本机沙箱命令 + 联网开关 */
+  sandboxCommand: string;
+  sandboxNetwork: boolean;
+  /** sandbox: 隔离不可用时 true=报错（严格，默认）/ false=降级直接执行（宽松） */
+  sandboxStrict: boolean;
+  /** action: Komari 系统 RPC 方法 + 参数 */
+  actionMethod: string;
+  actionParams: string; // JSON 字符串
   timeout: number;
   notify: boolean;
   enabled: boolean;
@@ -94,12 +118,21 @@ export function taskFromInput(
   input: Record<string, unknown>,
   now = new Date().toISOString(),
 ): Task {
+  const rawType = String(input.type ?? "command");
+  const type: TaskType =
+    rawType === "sandbox" || rawType === "action" ? rawType : "command";
   return {
     id: asString(input.id, ""),
     name: asString(input.name, "Untitled task"),
     cron: asString(input.cron, ""),
+    type,
     command: asString(input.command, ""),
     nodes: asNodeIds(input.nodes),
+    sandboxCommand: asString(input.sandboxCommand, ""),
+    sandboxNetwork: asBoolean(input.sandboxNetwork, false),
+    sandboxStrict: asBoolean(input.sandboxStrict, true),
+    actionMethod: asString(input.actionMethod, ""),
+    actionParams: asString(input.actionParams, "{}"),
     timeout: asNumber(input.timeout, 300),
     notify: asBoolean(input.notify, true),
     enabled: asBoolean(input.enabled, true),
@@ -116,8 +149,20 @@ export function validateTask(task: Task): string | null {
   if (!isEvery && fields < 5) {
     return "Cron must be a 5/6-field expression or @every interval";
   }
-  if (task.command === "") return "Command is required";
-  if (task.nodes.length === 0) return "At least one target node is required";
+  switch (task.type) {
+    case "command":
+      if (task.command === "") return "Command is required";
+      if (task.nodes.length === 0) return "At least one target node is required";
+      break;
+    case "sandbox":
+      if (task.sandboxCommand === "") return "Sandbox command is required";
+      break;
+    case "action":
+      if (task.actionMethod === "") return "Action method is required";
+      try { JSON.parse(task.actionParams || "{}"); }
+      catch { return "Action params must be valid JSON"; }
+      break;
+  }
   return null;
 }
 
@@ -135,7 +180,7 @@ export function isFailure(results: TaskResult[]): boolean {
   );
 }
 
-/** Builds a history entry from a settled round. */
+/** Builds a history entry from a settled round (command type). */
 export function buildHistoryEntry(
   task: Task,
   execTaskId: string,
@@ -147,6 +192,7 @@ export function buildHistoryEntry(
     ts: now,
     taskId: task.id,
     name: task.name,
+    type: task.type,
     command: task.command,
     nodes: task.nodes,
     execTaskId,
@@ -156,5 +202,26 @@ export function buildHistoryEntry(
       result: r.result,
       exit_code: r.exit_code,
     })),
+  };
+}
+
+/** Builds a single-result history entry (sandbox/action type). */
+export function buildSingleHistoryEntry(
+  task: Task,
+  description: string,
+  exitCode: number | null,
+  timedOut: boolean,
+  ok = exitCode === 0 || exitCode === null,
+  now = new Date().toISOString(),
+): HistoryEntry {
+  return {
+    ts: now,
+    taskId: task.id,
+    name: task.name,
+    type: task.type,
+    command: description,
+    timedOut,
+    ok,
+    results: [{ result: description, exit_code: exitCode }],
   };
 }
