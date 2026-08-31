@@ -13,7 +13,7 @@
     "zh-TW": "依 cron 計畫在選定節點上定時執行 shell 指令，回收每個節點的執行結果，失敗時發送通知。",
     "en": "Scheduled command execution. Runs shell commands on selected nodes on cron schedules, collects per-node results, and notifies on failure."
   },
-  "version": "0.4.6",
+  "version": "0.5.0",
   "entry": "script.js",
   "author": {
     "zh-CN": "Komari Community",
@@ -22,7 +22,8 @@
   },
   "permissions": {
     "allowSystemRPC": true,
-    "node": true
+    "node": true,
+    "allowExec": true
   },
   "pages": [
     {
