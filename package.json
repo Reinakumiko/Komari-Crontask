@@ -1,6 +1,6 @@
 {
   "name": "komari-plugin-crontask",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "Komari Cron Task 插件：按 cron 计划在节点上定时执行命令",
   "scripts": {
