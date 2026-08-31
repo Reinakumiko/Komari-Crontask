@@ -73,6 +73,7 @@
   .sbx-reprobe { flex: none; border: 1px solid var(--border); background: #fff; border-radius: 7px;
                  padding: 3px 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
   .sbx-reprobe:hover { border-color: var(--primary); color: var(--primary); }
+  .badge.info { background: var(--primary-soft); color: var(--primary); }
 
   .muted { color: var(--muted); }
   .mono  { font-family: var(--mono); }
@@ -517,6 +518,7 @@
           <div class="exec-tabs" id="typeTabs">
             <button type="button" data-t="command" class="active">远程命令</button>
             <button type="button" data-t="sandbox">沙箱命令</button>
+            <button type="button" data-t="action">系统功能</button>
           </div>
         </div>
         <div class="sbx-env" id="sbxEnv" style="display:none">
@@ -548,6 +550,23 @@
               </span>
               <span class="switch"><input type="checkbox" id="f_sandbox_strict" checked><span class="slider"></span></span>
             </label>
+          </div>
+        </div>
+        <div id="actionFields" style="display:none">
+          <div class="field">
+            <label for="f_action_method">系统方法</label>
+            <input type="text" id="f_action_method" list="actionMethods" placeholder="例如 admin:vacuumDatabase">
+            <datalist id="actionMethods">
+              <option value="admin:vacuumDatabase">数据库体积整理（vacuum）</option>
+              <option value="admin:getNodes">获取节点列表</option>
+              <option value="admin:sendNotification">发送测试通知</option>
+              <option value="admin:getPluginLogs">读取插件日志</option>
+            </datalist>
+            <span class="muted" style="font-size:11.5px">输入 Komari 系统 RPC 方法名，回车确认。参数将原样传给该方法。</span>
+          </div>
+          <div class="field">
+            <label for="f_action_params">参数（JSON）</label>
+            <textarea id="f_action_params" class="term" spellcheck="false" placeholder='{}' style="min-height:64px"></textarea>
           </div>
         </div>
         <div class="field" id="nodeField">
@@ -677,16 +696,17 @@ function nodePills(ids) {
 }
 function taskRow(t) {
   const isSbx = t.type === "sandbox";
+  const isAct = t.type === "action";
   const status = t.enabled ? '<span class="badge on">启用</span>' : '<span class="badge off">停用</span>';
-  const typeChip = isSbx ? '<span class="badge warn">沙箱</span>' : "";
-  const cmd = isSbx ? t.sandboxCommand : t.command;
+  const typeChip = isSbx ? '<span class="badge warn">沙箱</span>' : isAct ? '<span class="badge info">系统功能</span>' : "";
+  const cmd = isSbx ? t.sandboxCommand : isAct ? t.actionMethod : t.command;
   const toggleBtn = t.enabled
     ? `<button data-act="toggle" class="btn-pause" title="停止定时触发">⏸ 停用</button>`
     : `<button data-act="toggle" class="btn-resume" title="恢复定时触发">▶ 启用</button>`;
   return `<tr data-id="${esc(t.id)}">
     <td><div class="t-name">${esc(t.name)} ${typeChip}</div><div class="t-cron">${esc(t.cron)}</div></td>
     <td><span class="t-cmd" title="${esc(cmd)}">${esc(cmd)}</span></td>
-    <td>${isSbx ? '<span class="node-pill">本机沙箱</span>' : nodePills(t.nodes)}</td>
+    <td>${isSbx ? '<span class="node-pill">本机沙箱</span>' : isAct ? '<span class="node-pill">Server 系统</span>' : nodePills(t.nodes)}</td>
     <td>${status}</td>
     <td><div class="row-actions">
       <button data-act="run" class="btn-run" title="立即执行一次">▶ 执行</button>
@@ -1037,7 +1057,9 @@ function openForm(task) {
   $("f_sandbox_command").value = task?.sandboxCommand ?? "";
   $("f_sandbox_network").checked = task ? !!task.sandboxNetwork : false;
   $("f_sandbox_strict").checked = task ? task.sandboxStrict !== false : true;
-  setType(task?.type === "sandbox" ? "sandbox" : "command");
+  $("f_action_method").value = task?.actionMethod ?? "";
+  $("f_action_params").value = task?.actionParams ?? "{}";
+  setType(task?.type === "sandbox" || task?.type === "action" ? task.type : "command");
   selectedNodes = new Set(task?.nodes ?? []);
   $("nodeFilter").value = "";
   renderNodePicker();
@@ -1050,13 +1072,17 @@ function setType(t) {
   targetType = t;
   [...$("typeTabs").children].forEach((b) => b.classList.toggle("active", b.dataset.t === t));
   const isCmd = t === "command";
+  const isSbx = t === "sandbox";
+  const isAct = t === "action";
   $("commandField").style.display = isCmd ? "" : "none";
   $("nodeField").style.display = isCmd ? "" : "none";
-  $("sandboxFields").style.display = isCmd ? "none" : "";
+  $("sandboxFields").style.display = isSbx ? "" : "none";
+  $("actionFields").style.display = isAct ? "" : "none";
   $("f_command").required = isCmd;
-  $("f_sandbox_command").required = !isCmd;
-  $("sbxEnv").style.display = isCmd ? "none" : "flex";
-  if (!isCmd) loadSandboxEnv(false);
+  $("f_sandbox_command").required = isSbx;
+  $("f_action_method").required = isAct;
+  $("sbxEnv").style.display = isSbx ? "flex" : "none";
+  if (isSbx) loadSandboxEnv(false);
 }
 async function loadSandboxEnv(force) {
   const box = $("sbxEnv");
@@ -1134,6 +1160,11 @@ async function saveForm(e) {
   e.preventDefault();
   if (targetType === "command" && !selectedNodes.size) { toast("请至少选择一个目标节点"); return; }
   if (targetType === "sandbox" && !$("f_sandbox_command").value.trim()) { toast("请填写沙箱命令"); return; }
+  if (targetType === "action" && !$("f_action_method").value.trim()) { toast("请填写系统方法"); return; }
+  if (targetType === "action") {
+    try { JSON.parse($("f_action_params").value || "{}"); }
+    catch { toast("参数必须是合法 JSON"); return; }
+  }
 
   const payload = {
     id: $("f_id").value,
@@ -1145,6 +1176,8 @@ async function saveForm(e) {
     sandboxCommand: targetType === "sandbox" ? $("f_sandbox_command").value : "",
     sandboxNetwork: targetType === "sandbox" ? $("f_sandbox_network").checked : false,
     sandboxStrict: targetType === "sandbox" ? $("f_sandbox_strict").checked : true,
+    actionMethod: targetType === "action" ? $("f_action_method").value.trim() : "",
+    actionParams: targetType === "action" ? ($("f_action_params").value.trim() || "{}") : "{}",
     timeout: Number($("f_timeout").value || 300),
     notify: $("f_notify").checked,
     enabled: $("f_enabled").checked,
@@ -1246,7 +1279,7 @@ function historyItem(h, open) {
   const verdict = (h.timedOut
     ? '<span class="badge warn">超时</span>'
     : failed ? '<span class="badge fail">失败</span>' : '<span class="badge ok">成功</span>')
-    + (h.type === "sandbox" ? ' <span class="badge warn">沙箱</span>' : "");
+    + (h.type === "sandbox" ? ' <span class="badge warn">沙箱</span>' : h.type === "action" ? ' <span class="badge info">系统功能</span>' : "");
   const absTime = new Date(h.ts).toLocaleString();
   const results = h.results.length
     ? h.results.map(nodeResultBlock).join("")
