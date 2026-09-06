@@ -74,6 +74,15 @@
                  padding: 3px 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
   .sbx-reprobe:hover { border-color: var(--primary); color: var(--primary); }
   .badge.info { background: var(--primary-soft); color: var(--primary); }
+  /* 调度时区行 + 任务列表时区徽标 */
+  .tz-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
+            border-top: 1px solid #f1f5f9; background: #f8fafc; }
+  .tz-row input { width: 130px; padding: 5px 9px; border: 1px solid var(--border);
+                  border-radius: 7px; font-size: 12.5px; font-family: inherit; }
+  .tz-row input:focus { outline: none; border-color: var(--primary); }
+  .tz-hint { color: var(--faint); font-size: 11.5px; }
+  .tz-chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px;
+             background: #e0f2fe; color: #0369a1; font-size: 10.5px; vertical-align: middle; }
 
   .muted { color: var(--muted); }
   .mono  { font-family: var(--mono); }
@@ -507,6 +516,19 @@
             <div class="cron-preview"><span class="cap">表达式</span>
               <input type="text" id="cronPreviewText" class="expr-input" value="0 3 * * *" spellcheck="false" title="可直接编辑，修改后自动同步可视化选择">
               <span class="human" id="cronHuman">每天 03:00</span></div>
+            <div class="tz-row">
+              <span class="cap">调度时区</span>
+              <input type="text" id="f_tz" list="tzPresets" placeholder="跟随服务器" spellcheck="false">
+              <datalist id="tzPresets">
+                <option value="UTC+8">北京时间</option>
+                <option value="UTC+9">东京</option>
+                <option value="UTC">协调世界时</option>
+                <option value="UTC+1">柏林/巴黎</option>
+                <option value="UTC-5">纽约</option>
+                <option value="UTC-8">洛杉矶</option>
+              </datalist>
+              <span class="tz-hint" id="tzHint"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -643,6 +665,13 @@ const $ = (id) => document.getElementById(id);
 let NODES = [];
 let selectedNodes = new Set();
 let targetType = "command"; // 执行目标: command(远程节点) | sandbox(server 沙箱)
+let SERVER_TZ_MIN = 0; // 服务器时区东偏分钟数（crontask.list 返回）
+function fmtTzOffset(min) {
+  const a = Math.abs(min);
+  if (a === 0) return "UTC";
+  return "UTC" + (min < 0 ? "-" : "+") + Math.floor(a / 60) +
+    (a % 60 ? ":" + String(a % 60).padStart(2, "0") : "");
+}
 const dialog = $("taskDialog");
 
 // ---------- 通用 ----------
@@ -704,7 +733,7 @@ function taskRow(t) {
     ? `<button data-act="toggle" class="btn-pause" title="停止定时触发">⏸ 停用</button>`
     : `<button data-act="toggle" class="btn-resume" title="恢复定时触发">▶ 启用</button>`;
   return `<tr data-id="${esc(t.id)}">
-    <td><div class="t-name">${esc(t.name)} ${typeChip}</div><div class="t-cron">${esc(t.cron)}</div></td>
+    <td><div class="t-name">${esc(t.name)} ${typeChip}</div><div class="t-cron">${esc(t.cron)}${t.tz ? ` <span class="tz-chip">${esc(t.tz)}</span>` : ""}</div></td>
     <td><span class="t-cmd" title="${esc(cmd)}">${esc(cmd)}</span></td>
     <td>${isSbx ? '<span class="node-pill">本机沙箱</span>' : isAct ? '<span class="node-pill">Server 系统</span>' : nodePills(t.nodes)}</td>
     <td>${status}</td>
@@ -1059,6 +1088,8 @@ function openForm(task) {
   $("f_sandbox_strict").checked = task ? task.sandboxStrict !== false : true;
   $("f_action_method").value = task?.actionMethod ?? "";
   $("f_action_params").value = task?.actionParams ?? "{}";
+  $("f_tz").value = task?.tz ?? "";
+  $("tzHint").textContent = "服务器时区 " + fmtTzOffset(SERVER_TZ_MIN) + " · 留空跟随服务器，设置后由插件按该时区精确触发";
   setType(task?.type === "sandbox" || task?.type === "action" ? task.type : "command");
   selectedNodes = new Set(task?.nodes ?? []);
   $("nodeFilter").value = "";
@@ -1170,6 +1201,7 @@ async function saveForm(e) {
     id: $("f_id").value,
     name: $("f_name").value.trim(),
     cron: buildCronExpr(),
+    tz: $("f_tz").value.trim(),
     type: targetType,
     command: targetType === "command" ? $("f_command").value : "",
     nodes: targetType === "command" ? [...selectedNodes] : [],
@@ -1236,7 +1268,8 @@ async function onTaskAction(act, id) {
         break;
       }
       case "edit": {
-        const r = await rpc("crontask.list");
+const r = await rpc("crontask.list");
+    SERVER_TZ_MIN = Number(r.serverTzOffsetMin ?? 0);
         const t = r.tasks.find((x) => x.id === id);
         if (t) openForm(t);
         return;

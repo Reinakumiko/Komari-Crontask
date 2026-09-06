@@ -43,6 +43,8 @@ export type Task = {
   cron: string;
   /** 执行目标: command(远程节点) | sandbox(server隔离环境) | action(Komari功能) */
   type: TaskType;
+  /** 调度时区: ""=跟随服务器本地时区（默认）；"UTC+8"/"UTC-5:30"=按该偏移调度 */
+  tz: string;
   /** command: 远程命令 + 目标节点 */
   command: string;
   nodes: string[];
@@ -68,6 +70,123 @@ export function normalizeCronExpression(expression: string): string {
   const trimmed = expression.trim();
   const compactEvery = trimmed.match(/^@every(\S+)$/i);
   return compactEvery ? `@every ${compactEvery[1]}` : trimmed;
+}
+
+// ---------------------------------------------------------------------------
+// 时区调度（UTC 偏移制）：解析 + cron 字段匹配器
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses "UTC+8" / "UTC-5:30" / "+08:00" into offset minutes east of UTC.
+ * Returns null for anything else (empty string = follow server timezone).
+ */
+export function parseTzOffsetMinutes(tz: string): number | null {
+  const s = String(tz ?? "").trim().toUpperCase();
+  if (s === "") return null;
+  if (s === "UTC") return 0;
+  const m = s.match(/^(?:UTC)?([+-])(\d{1,2})(?::(\d{2}))?$/);
+  if (!m) return null;
+  const sign = m[1] === "-" ? -1 : 1;
+  const hours = Number(m[2]);
+  const minutes = Number(m[3] ?? "0");
+  if (hours > 14 || minutes > 59) return null;
+  return sign * (hours * 60 + minutes);
+}
+
+/** One cron field: the set of accepted integers. */
+type CronFieldSet = { values: Set<number>; isStar: boolean };
+
+function parseCronField(
+  raw: string,
+  min: number,
+  max: number,
+): CronFieldSet | null {
+  const values = new Set<number>();
+  let isStar = false;
+  for (const part of raw.split(",")) {
+    const stepMatch = part.match(/^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/);
+    if (!stepMatch) return null;
+    const step = stepMatch[2] !== undefined ? Number(stepMatch[2]) : 1;
+    if (!Number.isInteger(step) || step < 1) return null;
+    const range = stepMatch[1];
+    let lo: number;
+    let hi: number;
+    if (range === "*") {
+      lo = min;
+      hi = max;
+      if (step === 1) isStar = true;
+    } else if (range.includes("-")) {
+      const [a, b] = range.split("-").map(Number);
+      lo = a;
+      hi = b;
+    } else {
+      lo = Number(range);
+      hi = step > 1 ? max : lo;
+    }
+    if (!Number.isInteger(lo) || !Number.isInteger(hi)) return null;
+    if (lo < min || hi > max || lo > hi) return null;
+    for (let v = lo; v <= hi; v += step) values.add(v);
+  }
+  if (values.size === 0) return null;
+  return { values, isStar };
+}
+
+/** Parsed cron expression: minute hour dom month dow (5-field, no seconds). */
+export type CronFields = {
+  minute: CronFieldSet;
+  hour: CronFieldSet;
+  dom: CronFieldSet;
+  month: CronFieldSet;
+  dow: CronFieldSet;
+};
+
+/**
+ * Parses a 5-field (or 6-field with leading seconds; seconds ignored) cron
+ * expression. Returns null when invalid. dow: 0-7 with both 0 and 7 = Sunday.
+ */
+export function parseCronFields(expression: string): CronFields | null {
+  const parts = expression.trim().split(/\s+/);
+  if (parts.length === 6) parts.shift(); // drop seconds
+  if (parts.length !== 5) return null;
+  const minute = parseCronField(parts[0], 0, 59);
+  const hour = parseCronField(parts[1], 0, 23);
+  const dom = parseCronField(parts[2], 1, 31);
+  const month = parseCronField(parts[3], 1, 12);
+  const dow = parseCronField(parts[4], 0, 7);
+  if (!minute || !hour || !dom || !month || !dow) return null;
+  if (dow.values.has(7)) dow.values.add(0); // 7 == Sunday
+  return { minute, hour, dom, month, dow };
+}
+
+/**
+ * Standard cron match semantics: day matches when dom and month match AND
+ * (dow matches OR dom is star); when BOTH dom and dow are restricted, either
+ * one matching is enough.
+ */
+export function cronMatches(fields: CronFields, date: Date): boolean {
+  if (!fields.minute.values.has(date.getUTCMinutes())) return false;
+  if (!fields.hour.values.has(date.getUTCHours())) return false;
+  if (!fields.month.values.has(date.getUTCMonth() + 1)) return false;
+  const domHit = fields.dom.values.has(date.getUTCDate());
+  const dowHit = fields.dow.values.has(date.getUTCDay());
+  if (!fields.dom.isStar && !fields.dow.isStar) {
+    if (!domHit && !dowHit) return false;
+  } else if (!domHit || !dowHit) {
+    return false;
+  }
+  return true;
+}
+
+/** Convenience: does the cron expression fire at `date` interpreted via tz offset minutes? */
+export function cronMatchesInTz(
+  expression: string,
+  tzOffsetMinutes: number,
+  date: Date,
+): boolean {
+  const fields = parseCronFields(normalizeCronExpression(expression));
+  if (!fields) return false;
+  const shifted = new Date(date.getTime() + tzOffsetMinutes * 60000);
+  return cronMatches(fields, shifted);
 }
 
 /** Reads a string value with a fallback; trims surrounding whitespace. */
@@ -125,6 +244,7 @@ export function taskFromInput(
     id: asString(input.id, ""),
     name: asString(input.name, "Untitled task"),
     cron: asString(input.cron, ""),
+    tz: asString(input.tz, ""),
     type,
     command: asString(input.command, ""),
     nodes: asNodeIds(input.nodes),
@@ -148,6 +268,13 @@ export function validateTask(task: Task): string | null {
   const isEvery = /^@every\b/i.test(normalizeCronExpression(task.cron));
   if (!isEvery && fields < 5) {
     return "Cron must be a 5/6-field expression or @every interval";
+  }
+  if (parseTzOffsetMinutes(task.tz) === null && task.tz !== "") {
+    return "Timezone must be empty (server local) or a UTC offset like UTC+8";
+  }
+  // 自定义时区走分钟级自调度（忽略秒级字段），@every 与时区无关
+  if (task.tz !== "" && !isEvery && parseCronFields(task.cron) === null) {
+    return "Cron expression is invalid for custom timezone scheduling";
   }
   switch (task.type) {
     case "command":

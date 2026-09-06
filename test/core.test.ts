@@ -11,6 +11,9 @@ import {
   buildHistoryEntry,
   previewResult,
   isFailure,
+  cronMatchesInTz,
+  parseCronFields,
+  parseTzOffsetMinutes,
   type Task,
 } from "../src/core";
 
@@ -87,7 +90,7 @@ test("taskFromInput: fills defaults and normalizes fields", () => {
 test("validateTask: rejects missing fields", () => {
   const base: Task = {
     id: "x", name: "A", cron: "0 3 * * *", command: "echo", type: "command",
-    nodes: ["n1"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true,
+    nodes: ["n1"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}",
     timeout: 60, notify: true, enabled: true, createdAt: "",
   };
@@ -115,7 +118,7 @@ test("taskFromInput: sandbox and action types parse", () => {
 test("validateTask: sandbox and action specific checks", () => {
   const sb: Task = {
     id: "x", name: "S", cron: "0 3 * * *", type: "sandbox",
-    command: "", nodes: [], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true,
+    command: "", nodes: [], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}", timeout: 60, notify: true, enabled: true, createdAt: "",
   };
   assert.match(validateTask(sb) ?? "", /Sandbox/);
@@ -123,7 +126,7 @@ test("validateTask: sandbox and action specific checks", () => {
 
   const ac: Task = {
     id: "x", name: "A", cron: "0 3 * * *", type: "action",
-    command: "", nodes: [], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true,
+    command: "", nodes: [], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}", timeout: 60, notify: true, enabled: true, createdAt: "",
   };
   assert.match(validateTask(ac) ?? "", /Action method/);
@@ -134,7 +137,7 @@ test("validateTask: sandbox and action specific checks", () => {
 test("validateTask: allows @every style", () => {
   const base: Task = {
     id: "x", name: "A", cron: "@every 1m", command: "echo", type: "command",
-    nodes: ["n1"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true,
+    nodes: ["n1"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}",
     timeout: 60, notify: true, enabled: true, createdAt: "",
   };
@@ -146,7 +149,7 @@ test("validateTask: allows @every style", () => {
 test("buildHistoryEntry: maps results and carries round metadata", () => {
   const task: Task = {
     id: "t1", name: "Alpha", cron: "0 3 * * *", command: "echo a", type: "command",
-    nodes: ["n1", "n2"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true,
+    nodes: ["n1", "n2"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}",
     timeout: 60, notify: true, enabled: true, createdAt: "",
   };
@@ -181,4 +184,50 @@ test("isFailure: non-zero, null, or no results means failure", () => {
     { client: "n1", result: "", exit_code: 0 },
     { client: "n2", result: "", exit_code: 0 },
   ]), false);
+});
+// ---- 时区调度：parseTzOffsetMinutes / parseCronFields / cronMatchesInTz ----
+
+test("parseTzOffsetMinutes: accepts UTC offsets, rejects the rest", () => {
+  assert.equal(parseTzOffsetMinutes(""), null); // 空 = 跟随服务器
+  assert.equal(parseTzOffsetMinutes("UTC+8"), 480);
+  assert.equal(parseTzOffsetMinutes("utc-5:30"), -330); // 大小写不敏感
+  assert.equal(parseTzOffsetMinutes("+08:00"), 480);
+  assert.equal(parseTzOffsetMinutes("UTC"), 0);
+  assert.equal(parseTzOffsetMinutes("UTC+14"), 840);
+  assert.equal(parseTzOffsetMinutes("Asia/Shanghai"), null); // 仅支持偏移
+  assert.equal(parseTzOffsetMinutes("UTC+99"), null);
+  assert.equal(parseTzOffsetMinutes("UTC+8:75"), null);
+});
+
+test("parseCronFields: validates fields, drops seconds, folds dow 7", () => {
+  assert.ok(parseCronFields("0 5 * * *"));
+  assert.ok(parseCronFields("30 8 1,15 * 1-5"));
+  assert.ok(parseCronFields("0 0 0 0 0 0".slice(0, 0) + "0 3 * * * 5")); // 6字段丢秒
+  assert.equal(parseCronFields("60 * * * *"), null); // 分钟越界
+  assert.equal(parseCronFields("* 25 * * *"), null); // 小时越界
+  assert.equal(parseCronFields("0 3 * 13 *"), null); // 月份越界
+  assert.equal(parseCronFields("0 3 * *"), null); // 字段数不足
+  const f = parseCronFields("0 3 * * 7");
+  assert.ok(f && f.dow.values.has(0)); // 7 折叠为周日
+});
+
+test("cronMatchesInTz: daily 05:00 UTC+8 fires at 21:00 UTC prev day", () => {
+  // 2026-03-10 21:00:00 UTC = 北京时间 2026-03-11 05:00
+  const utc2100 = new Date("2026-03-10T21:00:00Z");
+  assert.equal(cronMatchesInTz("0 5 * * *", 480, utc2100), true);
+  // 同一时刻按 UTC（offset 0）应是 21:00，不匹配 05:00
+  assert.equal(cronMatchesInTz("0 5 * * *", 0, utc2100), false);
+  // 北京 05:01 不匹配
+  const utc2101 = new Date("2026-03-10T21:01:00Z");
+  assert.equal(cronMatchesInTz("0 5 * * *", 480, utc2101), false);
+});
+
+test("cronMatchesInTz: dom/dow OR semantics and lists/steps", () => {
+  // 北京时间 2026-03-10（周二）05:00 = UTC 2026-03-09（周一）21:00
+  const tueBeijing = new Date("2026-03-09T21:00:00Z");
+  assert.equal(cronMatchesInTz("0 5 10 * 1", 480, tueBeijing), true); // dom 10 命中
+  assert.equal(cronMatchesInTz("0 5 11 * 2", 480, tueBeijing), true); // dow 周二命中
+  assert.equal(cronMatchesInTz("0 5 11 * 1", 480, tueBeijing), false); // 都不命中
+  assert.equal(cronMatchesInTz("*/15 5 * * *", 480, new Date("2026-03-09T21:45:00Z")), true);
+  assert.equal(cronMatchesInTz("*/15 5 * * *", 480, new Date("2026-03-09T21:50:00Z")), false);
 });
