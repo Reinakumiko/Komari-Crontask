@@ -6,8 +6,10 @@ import {
   asBoolean,
   buildHistoryEntry,
   buildSingleHistoryEntry,
+  cronMatchesInTz,
   isFailure,
   normalizeCronExpression,
+  parseTzOffsetMinutes,
   previewResult,
   taskFromInput,
   validateTask,
@@ -157,18 +159,58 @@ function dispatchByExpression(expr: string): Promise<unknown[]> {
   for (const task of loadTasksSync()) {
     if (!task.enabled) continue;
     if (normalizeCronExpression(task.cron) !== expr) continue;
+    // 自定义时区任务由 tz tick 调度，避免与宿主 cron 双触发
+    if (parseTzOffsetMinutes(task.tz) !== null) continue;
     if (!isTaskExecutable(task)) continue;
     pending.push(dispatchTask(task));
   }
   return Promise.all(pending);
 }
 
+/** 自定义时区任务的分钟级 tick 表达式（所有 tz 任务共用一次注册）。 */
+const TZ_TICK_EXPR = "* * * * *";
+/** 每任务最近一次触发的去重键（任务时区下的绝对分钟数）。 */
+const lastFiredKeys = new Map<string, string>();
+
+/**
+ * 分钟级 tick：在任务的时区语义下匹配 cron 并触发。
+ * 每次检查当前分钟与上一分钟（宿主触发抖动容错），去重键保证单次触发。
+ */
+function cronTick(now = new Date()): void {
+  const tasks = loadTasksSync();
+  for (const task of tasks) {
+    if (!task.enabled) continue;
+    const offsetMin = parseTzOffsetMinutes(task.tz);
+    if (offsetMin === null) continue;
+    const expr = normalizeCronExpression(task.cron);
+    if (expr === "" || /^@every\b/i.test(expr)) continue;
+    if (!isTaskExecutable(task)) continue;
+    for (const backMin of [1, 0]) {
+      const candidate = new Date(now.getTime() - backMin * 60000);
+      if (!cronMatchesInTz(expr, offsetMin, candidate)) continue;
+      const key = `${task.id}:${Math.floor(
+        (candidate.getTime() + offsetMin * 60000) / 60000,
+      )}`;
+      if (lastFiredKeys.get(task.id) === key) continue;
+      lastFiredKeys.set(task.id, key);
+      void dispatchTask(task);
+      break;
+    }
+  }
+}
+
 /** Registers server.cron for every unique expression in the task list. */
 function syncCrons(tasks: Task[]): void {
+  let needsTzTick = false;
   for (const task of tasks) {
     if (!task.enabled) continue;
     const expr = normalizeCronExpression(task.cron);
     if (expr === "") continue;
+    // 自定义时区任务：不注册宿主 cron（宿主只会按服务器时区触发），走 tz tick
+    if (parseTzOffsetMinutes(task.tz) !== null) {
+      needsTzTick = true;
+      continue;
+    }
     if (registeredCrons.has(expr)) continue;
     try {
       server.cron(expr, () => dispatchByExpression(expr));
@@ -176,6 +218,15 @@ function syncCrons(tasks: Task[]): void {
       console.log(`[crontask] scheduled cron ${expr}`);
     } catch (err) {
       console.log(`[crontask] bad cron "${expr}": ${String(err)}`);
+    }
+  }
+  if (needsTzTick && !registeredCrons.has(TZ_TICK_EXPR)) {
+    try {
+      server.cron(TZ_TICK_EXPR, () => cronTick());
+      registeredCrons.add(TZ_TICK_EXPR);
+      console.log(`[crontask] scheduled tz tick ${TZ_TICK_EXPR}`);
+    } catch (err) {
+      console.log(`[crontask] tz tick registration failed: ${String(err)}`);
     }
   }
 }
@@ -600,9 +651,14 @@ function newId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** crontask.list -> { tasks, nodes } */
-function rpcList(): { tasks: Task[]; nodes: NodeInfo[] } {
-  return { tasks: loadTasksSync(), nodes: [] };
+/** crontask.list -> { tasks, nodes, serverTzOffsetMin } */
+function rpcList(): { tasks: Task[]; nodes: NodeInfo[]; serverTzOffsetMin: number } {
+  return {
+    tasks: loadTasksSync(),
+    nodes: [],
+    // getTimezoneOffset 对 UTC 东侧返回负值，取负得到「东偏分钟数」
+    serverTzOffsetMin: -new Date().getTimezoneOffset(),
+  };
 }
 
 /** crontask.save: create or update a task. Returns synchronously. */

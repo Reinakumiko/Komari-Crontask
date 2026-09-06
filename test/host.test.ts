@@ -391,3 +391,28 @@ test("crontask.history returns entries newest-first", async () => {
   assert.ok(Array.isArray(history.history));
   assert.ok(history.history.length >= 1);
 });
+test("tz task schedules via minute tick and dispatches in task timezone", async () => {
+  await writeTasks([]);
+  await bootPlugin();
+  // 目标 cron = 当前北京时间分钟（UTC+8）：tick 立即触发时当前/上一分钟内必命中
+  const shiftedNow = new Date(Date.now() + 8 * 3600_000);
+  const m = shiftedNow.getUTCMinutes();
+  const h = shiftedNow.getUTCHours();
+  const saved = await rpc("crontask.save", makeTask({
+    id: "", name: "TzJob", cron: `${m} ${h} * * *`, tz: "UTC+8",
+    type: "command", command: "echo tz-ok", nodes: ["n1"],
+  }));
+  assert.equal(saved.ok, true);
+  host.taskResults["tid-1"] = [{ client: "n1", result: "tz-done", exit_code: 0 }];
+  // tz 任务的表达式不注册宿主 cron（宿主只会按服务器时区触发）
+  assert.ok(!host.cronJobs.some(j => j.expr === `${m} ${h} * * *`),
+    "tz task expr must not be registered with host cron");
+  // 应注册分钟级 tick
+  const tick = host.cronJobs.find(j => j.expr === "* * * * *");
+  assert.ok(tick, "tz minute tick should be registered");
+  // 触发 tick → tz 任务应被分发
+  (tick!.fn as () => void)();
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(host.execCalls.length, 1, "tz task should be dispatched once");
+  assert.equal(host.execCalls[0].command, "echo tz-ok");
+});

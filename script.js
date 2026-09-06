@@ -449,6 +449,80 @@
     const compactEvery = trimmed.match(/^@every(\S+)$/i);
     return compactEvery ? `@every ${compactEvery[1]}` : trimmed;
   }
+  function parseTzOffsetMinutes(tz) {
+    const s = String(tz ?? "").trim().toUpperCase();
+    if (s === "") return null;
+    if (s === "UTC") return 0;
+    const m = s.match(/^(?:UTC)?([+-])(\d{1,2})(?::(\d{2}))?$/);
+    if (!m) return null;
+    const sign = m[1] === "-" ? -1 : 1;
+    const hours = Number(m[2]);
+    const minutes = Number(m[3] ?? "0");
+    if (hours > 14 || minutes > 59) return null;
+    return sign * (hours * 60 + minutes);
+  }
+  function parseCronField(raw, min, max) {
+    const values = /* @__PURE__ */ new Set();
+    let isStar = false;
+    for (const part of raw.split(",")) {
+      const stepMatch = part.match(/^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/);
+      if (!stepMatch) return null;
+      const step = stepMatch[2] !== void 0 ? Number(stepMatch[2]) : 1;
+      if (!Number.isInteger(step) || step < 1) return null;
+      const range = stepMatch[1];
+      let lo;
+      let hi;
+      if (range === "*") {
+        lo = min;
+        hi = max;
+        if (step === 1) isStar = true;
+      } else if (range.includes("-")) {
+        const [a, b] = range.split("-").map(Number);
+        lo = a;
+        hi = b;
+      } else {
+        lo = Number(range);
+        hi = step > 1 ? max : lo;
+      }
+      if (!Number.isInteger(lo) || !Number.isInteger(hi)) return null;
+      if (lo < min || hi > max || lo > hi) return null;
+      for (let v = lo; v <= hi; v += step) values.add(v);
+    }
+    if (values.size === 0) return null;
+    return { values, isStar };
+  }
+  function parseCronFields(expression) {
+    const parts = expression.trim().split(/\s+/);
+    if (parts.length === 6) parts.shift();
+    if (parts.length !== 5) return null;
+    const minute = parseCronField(parts[0], 0, 59);
+    const hour = parseCronField(parts[1], 0, 23);
+    const dom = parseCronField(parts[2], 1, 31);
+    const month = parseCronField(parts[3], 1, 12);
+    const dow = parseCronField(parts[4], 0, 7);
+    if (!minute || !hour || !dom || !month || !dow) return null;
+    if (dow.values.has(7)) dow.values.add(0);
+    return { minute, hour, dom, month, dow };
+  }
+  function cronMatches(fields, date) {
+    if (!fields.minute.values.has(date.getUTCMinutes())) return false;
+    if (!fields.hour.values.has(date.getUTCHours())) return false;
+    if (!fields.month.values.has(date.getUTCMonth() + 1)) return false;
+    const domHit = fields.dom.values.has(date.getUTCDate());
+    const dowHit = fields.dow.values.has(date.getUTCDay());
+    if (!fields.dom.isStar && !fields.dow.isStar) {
+      if (!domHit && !dowHit) return false;
+    } else if (!domHit || !dowHit) {
+      return false;
+    }
+    return true;
+  }
+  function cronMatchesInTz(expression, tzOffsetMinutes, date) {
+    const fields = parseCronFields(normalizeCronExpression(expression));
+    if (!fields) return false;
+    const shifted = new Date(date.getTime() + tzOffsetMinutes * 6e4);
+    return cronMatches(fields, shifted);
+  }
   function asString(value, fallback) {
     return typeof value === "string" && value.trim() !== "" ? value.trim() : fallback;
   }
@@ -488,6 +562,7 @@
       id: asString(input.id, ""),
       name: asString(input.name, "Untitled task"),
       cron: asString(input.cron, ""),
+      tz: asString(input.tz, ""),
       type,
       command: asString(input.command, ""),
       nodes: asNodeIds(input.nodes),
@@ -509,6 +584,12 @@
     const isEvery = /^@every\b/i.test(normalizeCronExpression(task.cron));
     if (!isEvery && fields < 5) {
       return "Cron must be a 5/6-field expression or @every interval";
+    }
+    if (parseTzOffsetMinutes(task.tz) === null && task.tz !== "") {
+      return "Timezone must be empty (server local) or a UTC offset like UTC+8";
+    }
+    if (task.tz !== "" && !isEvery && parseCronFields(task.cron) === null) {
+      return "Cron expression is invalid for custom timezone scheduling";
     }
     switch (task.type) {
       case "command":
@@ -638,16 +719,46 @@
     for (const task of loadTasksSync()) {
       if (!task.enabled) continue;
       if (normalizeCronExpression(task.cron) !== expr) continue;
+      if (parseTzOffsetMinutes(task.tz) !== null) continue;
       if (!isTaskExecutable(task)) continue;
       pending.push(dispatchTask(task));
     }
     return Promise.all(pending);
   }
+  var TZ_TICK_EXPR = "* * * * *";
+  var lastFiredKeys = /* @__PURE__ */ new Map();
+  function cronTick(now = /* @__PURE__ */ new Date()) {
+    const tasks = loadTasksSync();
+    for (const task of tasks) {
+      if (!task.enabled) continue;
+      const offsetMin = parseTzOffsetMinutes(task.tz);
+      if (offsetMin === null) continue;
+      const expr = normalizeCronExpression(task.cron);
+      if (expr === "" || /^@every\b/i.test(expr)) continue;
+      if (!isTaskExecutable(task)) continue;
+      for (const backMin of [1, 0]) {
+        const candidate = new Date(now.getTime() - backMin * 6e4);
+        if (!cronMatchesInTz(expr, offsetMin, candidate)) continue;
+        const key = `${task.id}:${Math.floor(
+          (candidate.getTime() + offsetMin * 6e4) / 6e4
+        )}`;
+        if (lastFiredKeys.get(task.id) === key) continue;
+        lastFiredKeys.set(task.id, key);
+        void dispatchTask(task);
+        break;
+      }
+    }
+  }
   function syncCrons(tasks) {
+    let needsTzTick = false;
     for (const task of tasks) {
       if (!task.enabled) continue;
       const expr = normalizeCronExpression(task.cron);
       if (expr === "") continue;
+      if (parseTzOffsetMinutes(task.tz) !== null) {
+        needsTzTick = true;
+        continue;
+      }
       if (registeredCrons.has(expr)) continue;
       try {
         import_plugin_sdk.server.cron(expr, () => dispatchByExpression(expr));
@@ -655,6 +766,15 @@
         console.log(`[crontask] scheduled cron ${expr}`);
       } catch (err) {
         console.log(`[crontask] bad cron "${expr}": ${String(err)}`);
+      }
+    }
+    if (needsTzTick && !registeredCrons.has(TZ_TICK_EXPR)) {
+      try {
+        import_plugin_sdk.server.cron(TZ_TICK_EXPR, () => cronTick());
+        registeredCrons.add(TZ_TICK_EXPR);
+        console.log(`[crontask] scheduled tz tick ${TZ_TICK_EXPR}`);
+      } catch (err) {
+        console.log(`[crontask] tz tick registration failed: ${String(err)}`);
       }
     }
   }
@@ -1021,7 +1141,12 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   }
   function rpcList() {
-    return { tasks: loadTasksSync(), nodes: [] };
+    return {
+      tasks: loadTasksSync(),
+      nodes: [],
+      // getTimezoneOffset 对 UTC 东侧返回负值，取负得到「东偏分钟数」
+      serverTzOffsetMin: -(/* @__PURE__ */ new Date()).getTimezoneOffset()
+    };
   }
   function rpcSave(input) {
     const operator = String(input?._operator ?? "admin");
