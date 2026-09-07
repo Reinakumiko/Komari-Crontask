@@ -74,13 +74,11 @@
                  padding: 3px 9px; font-size: 12px; color: var(--muted); cursor: pointer; }
   .sbx-reprobe:hover { border-color: var(--primary); color: var(--primary); }
   .badge.info { background: var(--primary-soft); color: var(--primary); }
-  /* 调度时区行 + 任务列表时区徽标 */
-  .tz-row { display: flex; align-items: center; gap: 8px; padding: 8px 14px;
-            border-top: 1px solid #f1f5f9; background: #f8fafc; }
-  .tz-row input { width: 130px; padding: 5px 9px; border: 1px solid var(--border);
-                  border-radius: 7px; font-size: 12.5px; font-family: inherit; }
-  .tz-row input:focus { outline: none; border-color: var(--primary); }
-  .tz-hint { color: var(--faint); font-size: 11.5px; }
+  /* 调度时区下拉 + 任务列表时区徽标 */
+  .tz-select { flex: none; margin-left: auto; max-width: 220px; padding: 4px 7px;
+               border: 1px solid var(--border); border-radius: 7px; font-size: 12px;
+               font-family: inherit; color: var(--muted); background: #fff; cursor: pointer; }
+  .tz-select:focus { outline: none; border-color: var(--primary); }
   .tz-chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px;
              background: #e0f2fe; color: #0369a1; font-size: 10.5px; vertical-align: middle; }
 
@@ -407,6 +405,7 @@
   <div class="card">
     <div class="card-title">执行历史 <span class="sub" id="historyCount"></span>
       <span class="right">
+        <button class="ghost" id="btnToggleTime">时间: 相对</button>
         <button class="ghost" id="btnExpandAll">全部展开</button>
         <button class="ghost" id="btnCollapseAll">全部收起</button>
       </span>
@@ -515,19 +514,37 @@
             </div>
             <div class="cron-preview"><span class="cap">表达式</span>
               <input type="text" id="cronPreviewText" class="expr-input" value="0 3 * * *" spellcheck="false" title="可直接编辑，修改后自动同步可视化选择">
-              <span class="human" id="cronHuman">每天 03:00</span></div>
-            <div class="tz-row">
-              <span class="cap">调度时区</span>
-              <input type="text" id="f_tz" list="tzPresets" placeholder="跟随服务器" spellcheck="false">
-              <datalist id="tzPresets">
-                <option value="UTC+8">北京时间</option>
-                <option value="UTC+9">东京</option>
-                <option value="UTC">协调世界时</option>
-                <option value="UTC+1">柏林/巴黎</option>
-                <option value="UTC-5">纽约</option>
-                <option value="UTC-8">洛杉矶</option>
-              </datalist>
-              <span class="tz-hint" id="tzHint"></span>
+              <span class="human" id="cronHuman">每天 03:00</span>
+              <select id="f_tz" class="tz-select" title="调度时区：默认跟随浏览器；留空跟随服务器；或选固定 UTC 偏移（不随夏令时变化）">
+                <option value="__browser__">跟随浏览器时区</option>
+                <option value="">跟随服务器时区</option>
+                <optgroup label="东亚">
+                  <option value="UTC+8">UTC+8 · 北京/香港</option>
+                  <option value="UTC+9">UTC+9 · 东京/首尔</option>
+                  <option value="UTC+7">UTC+7 · 曼谷/雅加达</option>
+                </optgroup>
+                <optgroup label="东南亚">
+                  <option value="UTC+8">UTC+8 · 新加坡/吉隆坡/马尼拉</option>
+                  <option value="UTC+7">UTC+7 · 河内/金边</option>
+                  <option value="UTC+6:30">UTC+6:30 · 仰光</option>
+                </optgroup>
+                <optgroup label="澳洲/大洋洲">
+                  <option value="UTC+10">UTC+10 · 悉尼/墨尔本</option>
+                  <option value="UTC+9:30">UTC+9:30 · 阿德莱德/达尔文</option>
+                  <option value="UTC+12">UTC+12 · 奥克兰/斐济</option>
+                </optgroup>
+                <optgroup label="欧洲">
+                  <option value="UTC+1">UTC+1 · 柏林/巴黎/罗马</option>
+                  <option value="UTC">UTC+0 · 伦敦/里斯本</option>
+                </optgroup>
+                <optgroup label="美洲">
+                  <option value="UTC-5">UTC-5 · 纽约/多伦多</option>
+                  <option value="UTC-6">UTC-6 · 芝加哥/墨西哥城</option>
+                  <option value="UTC-7">UTC-7 · 丹佛</option>
+                  <option value="UTC-8">UTC-8 · 洛杉矶/温哥华</option>
+                  <option value="UTC-10">UTC-10 · 檀香山</option>
+                </optgroup>
+              </select>
             </div>
           </div>
         </div>
@@ -672,6 +689,36 @@ function fmtTzOffset(min) {
   return "UTC" + (min < 0 ? "-" : "+") + Math.floor(a / 60) +
     (a % 60 ? ":" + String(a % 60).padStart(2, "0") : "");
 }
+function browserTzOffset() {
+  return -new Date().getTimezoneOffset();
+}
+/** 让「跟随浏览器/跟随服务器」两个选项带上探测到的偏移（如 跟随浏览器时区 (UTC+8)） */
+function refreshTzOptionLabels() {
+  const b = $("f_tz").querySelector('option[value="__browser__"]');
+  if (b) b.textContent = "跟随浏览器时区 (" + fmtTzOffset(browserTzOffset()) + ")";
+  const s = $("f_tz").querySelector('option[value=""]');
+  if (s) s.textContent = "跟随服务器时区 (" + fmtTzOffset(SERVER_TZ_MIN) + ")";
+}
+/** 按任务的 tz 值设置下拉：新任务默认跟随浏览器；存储的自定义偏移动态补选项 */
+function setTzSelect(tz) {
+  const sel = $("f_tz");
+  const custom = sel.querySelector("option.tz-custom");
+  if (custom) custom.remove();
+  const known = [...sel.options].some((o) => o.value === tz);
+  if (tz === "" || known) {
+    sel.value = tz;
+  } else if (tz === "__browser__" || tz === null || tz === undefined) {
+    sel.value = "__browser__";
+  } else {
+    const opt = document.createElement("option");
+    opt.className = "tz-custom";
+    opt.value = tz;
+    opt.textContent = tz + "（自定义）";
+    sel.appendChild(opt);
+    sel.value = tz;
+  }
+  refreshTzOptionLabels();
+}
 const dialog = $("taskDialog");
 
 // ---------- 通用 ----------
@@ -712,6 +759,14 @@ function timeAgo(iso) {
   if (diff < 3600e3) return Math.floor(diff / 60e3) + " 分钟前";
   if (diff < 86400e3) return Math.floor(diff / 3600e3) + " 小时前";
   return Math.floor(diff / 86400e3) + " 天前";
+}
+/** 相对/绝对时间开关（localStorage 持久化），列表与审计共用 */
+let showAbsTime = localStorage.getItem("crontaskTimeMode") === "abs";
+function fmtListTime(iso) {
+  return showAbsTime ? new Date(iso).toLocaleString() : timeAgo(iso);
+}
+function updateTimeToggleLabel() {
+  $("btnToggleTime").textContent = showAbsTime ? "时间: 绝对" : "时间: 相对";
 }
 
 // ---------- 任务列表 ----------
@@ -1088,8 +1143,7 @@ function openForm(task) {
   $("f_sandbox_strict").checked = task ? task.sandboxStrict !== false : true;
   $("f_action_method").value = task?.actionMethod ?? "";
   $("f_action_params").value = task?.actionParams ?? "{}";
-  $("f_tz").value = task?.tz ?? "";
-  $("tzHint").textContent = "服务器时区 " + fmtTzOffset(SERVER_TZ_MIN) + " · 留空跟随服务器，设置后由插件按该时区精确触发";
+  setTzSelect(task?.tz ?? "");
   setType(task?.type === "sandbox" || task?.type === "action" ? task.type : "command");
   selectedNodes = new Set(task?.nodes ?? []);
   $("nodeFilter").value = "";
@@ -1201,7 +1255,9 @@ async function saveForm(e) {
     id: $("f_id").value,
     name: $("f_name").value.trim(),
     cron: buildCronExpr(),
-    tz: $("f_tz").value.trim(),
+    tz: ($("f_tz").value === "__browser__"
+      ? fmtTzOffset(browserTzOffset())
+      : $("f_tz").value.trim()),
     type: targetType,
     command: targetType === "command" ? $("f_command").value : "",
     nodes: targetType === "command" ? [...selectedNodes] : [],
@@ -1268,8 +1324,9 @@ async function onTaskAction(act, id) {
         break;
       }
       case "edit": {
-const r = await rpc("crontask.list");
+    const r = await rpc("crontask.list");
     SERVER_TZ_MIN = Number(r.serverTzOffsetMin ?? 0);
+    refreshTzOptionLabels();
         const t = r.tasks.find((x) => x.id === id);
         if (t) openForm(t);
         return;
@@ -1321,7 +1378,7 @@ function historyItem(h, open) {
     <div class="h-head" data-toggle>
       <span class="h-name">${esc(h.name)}</span>
       ${verdict}
-      <span class="h-time" title="${esc(absTime)}">${esc(timeAgo(h.ts))}</span>
+      <span class="h-time" title="${esc(absTime)}">${esc(fmtListTime(h.ts))}</span>
       <span class="h-toggle">▾</span>
     </div>
     <div class="h-body" ${open ? "" : "hidden"}>
@@ -1348,7 +1405,7 @@ function auditRow(a) {
     <div class="h-head" style="cursor:default">
       <span class="h-name">${esc(label)}</span>
       <span class="badge ${tone}">${esc(a.taskName)}</span>
-      <span class="h-time" title="${esc(new Date(a.ts).toLocaleString())}">${esc(timeAgo(a.ts))}</span>
+      <span class="h-time" title="${esc(new Date(a.ts).toLocaleString())}">${esc(fmtListTime(a.ts))}</span>
     </div>
     <div class="h-body" style="display:block;border-top:1px solid #f1f5f9;padding:8px 14px">
       <span class="muted">操作者：</span><strong>${esc(a.operator)}</strong>
@@ -1401,6 +1458,14 @@ $("btnCollapseAll").addEventListener("click", () => {
     item.classList.remove("open");
   });
 });
+$("btnToggleTime").addEventListener("click", () => {
+  showAbsTime = !showAbsTime;
+  localStorage.setItem("crontaskTimeMode", showAbsTime ? "abs" : "rel");
+  updateTimeToggleLabel();
+  refreshHistory();
+  refreshAudit();
+});
+updateTimeToggleLabel();
 
 // ---------- 初始化 ----------
 $("btnNew").addEventListener("click", () => openForm(null));
