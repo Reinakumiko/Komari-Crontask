@@ -1362,13 +1362,15 @@ function nodeResultBlock(r) {
   const exit = r.exit_code;
   const exitCls = exit === 0 ? "zero" : "nonzero";
   const exitText = exit === null || exit === undefined ? "未返回" : `exit ${exit}`;
+  // 宿主写回的下发错误翻译成人话（如离线节点）
+  const out = String(r.result ?? "").replace(/GoError: No clients connected/gi, "目标节点均离线，命令未下发");
   const name = label ? esc(label) : `<span class="mono" style="font-size:11px">${esc(r.client.slice(0, 13))}…</span>`;
   return `<div class="h-node">
     <div class="h-node-head">
       <span class="h-node-name">${name}</span>
       <span class="h-exit ${exitCls}">${exitText}</span>
     </div>
-    <div class="h-out">${esc(r.result)}</div>
+    <div class="h-out">${esc(out)}</div>
   </div>`;
 }
 function historyItem(h, open) {

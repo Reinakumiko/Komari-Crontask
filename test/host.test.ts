@@ -86,6 +86,10 @@ function createServerModule() {
         case "admin:exec": {
           const p = params as { command: string; clients: string[] };
           host.execCalls.push({ command: p.command, clients: p.clients });
+          // 模拟 komari 对全部离线节点抛错（部分宿主版本行为）
+          if (p.clients.length > 0 && p.clients.every((c) => c.startsWith("offline-"))) {
+            throw new Error("No clients connected");
+          }
           const taskId = `tid-${host.execCalls.length}`;
           // Mirror the real server: pre-create rows with exit_code null.
           if (!(taskId in host.taskResults)) {
@@ -415,4 +419,25 @@ test("tz task schedules via minute tick and dispatches in task timezone", async 
   await new Promise((r) => setTimeout(r, 50));
   assert.equal(host.execCalls.length, 1, "tz task should be dispatched once");
   assert.equal(host.execCalls[0].command, "echo tz-ok");
+});
+
+test("exec failure (target node offline) records history with reason and notifies", async () => {
+  await writeTasks([]);
+  await bootPlugin();
+  const saved = await rpc("crontask.save", makeTask({
+    id: "", name: "OffJob", command: "echo x", nodes: ["offline-node-1"],
+  }));
+  assert.equal(saved.ok, true);
+  const list = await rpc("crontask.list");
+  const runRes = await rpc("crontask.run", { id: list.tasks[0].id });
+  assert.equal(runRes.ok, true);
+  await new Promise((r) => setTimeout(r, 80));
+  const history = await rpc("crontask.history", { limit: 5 });
+  const entry = history.history.find((h) => h.name === "OffJob");
+  assert.ok(entry, "exec failure must be recorded in history");
+  assert.equal(entry.results[0].exit_code, -2);
+  assert.match(entry.results[0].result, /目标节点均未连接到 Komari/);
+  assert.equal(entry.ok, false);
+  // 失败通知也应发出
+  assert.ok(host.notifications.length >= 1, "failure notification should be sent");
 });

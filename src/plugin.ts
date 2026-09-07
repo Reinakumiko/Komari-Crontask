@@ -317,6 +317,14 @@ async function dispatchTask(task: Task): Promise<void> {
 }
 
 /** command：远程节点执行 */
+/** 把宿主下发错误翻译成人话（历史与通知里展示用） */
+function humanizeExecError(raw: string): string {
+  if (/no clients connected/i.test(raw)) {
+    return "目标节点均未连接到 Komari（离线），命令未下发";
+  }
+  return raw.slice(0, 160);
+}
+
 async function dispatchRemoteTask(effective: Task): Promise<void> {
   let taskId: string;
   try {
@@ -326,8 +334,20 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
     });
     taskId = summary.task_id;
   } catch (err) {
-    console.log(`[crontask] task ${effective.id} exec failed: ${String(err)}`);
-    await notifyFailure(effective, `[Cron Task] ${effective.name}\nExec failed: ${String(err)}`);
+    // 下发失败（典型：目标节点全部离线）。必须落历史，否则用户无从知晓为何没有执行。
+    const raw = String(err);
+    console.log(`[crontask] task ${effective.id} exec failed: ${raw}`);
+    const entry = buildSingleHistoryEntry(
+      effective,
+      `执行下发失败: ${humanizeExecError(raw)}`.slice(0, 200),
+      -2,
+      false,
+      false,
+      new Date().toISOString(),
+    );
+    entry.detail = raw.slice(0, 500);
+    appendHistorySync(entry);
+    await notifyFailure(effective, `[Cron Task] ${effective.name}\n执行下发失败: ${humanizeExecError(raw)}`);
     return;
   }
 

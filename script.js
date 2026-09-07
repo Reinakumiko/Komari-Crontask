@@ -843,6 +843,12 @@
       inFlight.delete(task.id);
     }
   }
+  function humanizeExecError(raw) {
+    if (/no clients connected/i.test(raw)) {
+      return "\u76EE\u6807\u8282\u70B9\u5747\u672A\u8FDE\u63A5\u5230 Komari\uFF08\u79BB\u7EBF\uFF09\uFF0C\u547D\u4EE4\u672A\u4E0B\u53D1";
+    }
+    return raw.slice(0, 160);
+  }
   async function dispatchRemoteTask(effective) {
     let taskId;
     try {
@@ -852,9 +858,20 @@
       });
       taskId = summary.task_id;
     } catch (err) {
-      console.log(`[crontask] task ${effective.id} exec failed: ${String(err)}`);
+      const raw = String(err);
+      console.log(`[crontask] task ${effective.id} exec failed: ${raw}`);
+      const entry2 = buildSingleHistoryEntry(
+        effective,
+        `\u6267\u884C\u4E0B\u53D1\u5931\u8D25: ${humanizeExecError(raw)}`.slice(0, 200),
+        -2,
+        false,
+        false,
+        (/* @__PURE__ */ new Date()).toISOString()
+      );
+      entry2.detail = raw.slice(0, 500);
+      appendHistorySync(entry2);
       await notifyFailure(effective, `[Cron Task] ${effective.name}
-Exec failed: ${String(err)}`);
+\u6267\u884C\u4E0B\u53D1\u5931\u8D25: ${humanizeExecError(raw)}`);
       return;
     }
     const { results, timedOut } = await pollTaskResults(
