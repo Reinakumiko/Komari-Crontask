@@ -52,16 +52,23 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ github.ref_name }}
+          RELEASE_PRERELEASE: ${{ vars.RELEASE_PRERELEASE }}
         run: |
           VERSION="${VERSION#v}"
           ASSET="dist/crontask-${VERSION}.zip"
           ls -la "$ASSET"
           TAG="${GITHUB_REF_NAME}"
+          # 仓库变量 RELEASE_PRERELEASE=true 时所有版本带 pre-release 标记
+          # （测试期用；转正式时把变量改掉即可，无需动 workflow）
+          PRERELEASE_FLAG=""
+          if [ "${RELEASE_PRERELEASE:-false}" = "true" ]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "release exists, uploading asset"
             gh release upload "$TAG" "$ASSET" --clobber
           else
-            gh release create "$TAG" --title "$TAG" --generate-notes "$ASSET"
+            gh release create "$TAG" --title "$TAG" --generate-notes $PRERELEASE_FLAG "$ASSET"
           fi
 
       # catalog 更新内联执行：GITHUB_TOKEN 创建的 release 不会级联触发
@@ -114,5 +121,20 @@ jobs:
             echo "no catalog changes"
           else
             git commit -m "chore(market): update catalog for ${TAG}"
-            git push origin HEAD:main
+            # 推送前带冲突自愈：若 main 上有并发提交导致 push 被拒，
+            # 先 rebase 再重试（最多 3 轮），保证 catalog 更新幂等落盘。
+            for attempt in 1 2 3; do
+              if git push origin HEAD:main 2>/dev/null; then
+                echo "catalog pushed"
+                break
+              fi
+              echo "push conflict, rebasing and retrying (${attempt}/3)..."
+              git pull --rebase origin main || { echo "rebase failed"; exit 1; }
+              git add market/v1.json
+              if git diff --cached --quiet; then
+                echo "no catalog changes after rebase"
+                break
+              fi
+              git commit -m "chore(market): update catalog for ${TAG}" || true
+            done
           fi

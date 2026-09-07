@@ -74,5 +74,19 @@ jobs:
             echo "no catalog changes"
           else
             git commit -m "chore(market): update catalog for v${TAG}"
-            git push
+            # 与 release.yml 相同：推送带冲突自愈（rebase 后重试），幂等落盘
+            for attempt in 1 2 3; do
+              if git push origin HEAD:main 2>/dev/null; then
+                echo "catalog pushed"
+                break
+              fi
+              echo "push conflict, rebasing and retrying (${attempt}/3)..."
+              git pull --rebase origin main || { echo "rebase failed"; exit 1; }
+              git add market/v1.json
+              if git diff --cached --quiet; then
+                echo "no catalog changes after rebase"
+                break
+              fi
+              git commit -m "chore(market): update catalog for v${TAG}" || true
+            done
           fi
