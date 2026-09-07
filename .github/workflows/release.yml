@@ -45,6 +45,12 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Inject version into admin page
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/__PLUGIN_VERSION__/${VERSION}/g" admin/index.html
+          grep -n "cron-task v" admin/index.html
+
       - name: Pack plugin archive
         run: npm run pack
 

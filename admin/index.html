@@ -380,7 +380,7 @@
 <header>
   <div class="brand">
     <h1>定时任务</h1>
-    <span class="ver">cron-task v0.3.5</span>
+    <span class="ver">cron-task v__PLUGIN_VERSION__</span>
   </div>
   <div class="actions">
     <button class="secondary" id="btnRefresh">刷新</button>
@@ -1468,6 +1468,11 @@ $("btnToggleTime").addEventListener("click", () => {
 updateTimeToggleLabel();
 
 // ---------- 初始化 ----------
+// 版本占位符兜底：本地/非 CI 打包未注入版本时隐藏版本号，避免显示 __PLUGIN_VERSION__
+(function () {
+  const ver = document.querySelector(".ver");
+  if (ver && ver.textContent.includes("__PLUGIN_VERSION__")) ver.style.display = "none";
+})();
 $("btnNew").addEventListener("click", () => openForm(null));
 $("typeTabs").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-t]");

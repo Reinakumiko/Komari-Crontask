@@ -53,7 +53,7 @@ npm run typecheck   # 类型检查
 npm test            # 单元测试 + 宿主模拟集成测试（28 项）
 npm run check       # manifest 校验
 npm run build       # 产出 script.js
-npm run pack        # 产出 dist/crontask-0.3.0.zip
+npm run pack        # 产出 dist/crontask-<版本号>.zip（版本来自 komari-plugin.json）
 ```
 
 ### 集成测试说明
@@ -82,7 +82,7 @@ npm run pack        # 产出 dist/crontask-0.3.0.zip
 
 ### 方式二：官方市场
 
-将 `dist/crontask-0.3.0.zip` 挂到 GitHub Release（tag `v0.3.0`），然后在 [komari-monitor/plugin-market](https://github.com/komari-monitor/plugin-market) 提交插件 Issue；市场工作流会校验 SHA-256 并自动跟进后续 Release。
+将 `dist/crontask-<当前版本>.zip` 挂到 GitHub Release（tag `v<当前版本>`），然后在 [komari-monitor/plugin-market](https://github.com/komari-monitor/plugin-market) 提交插件 Issue；市场工作流会校验 SHA-256 并自动跟进后续 Release。
 
 ## 权限说明
 
