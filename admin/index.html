@@ -75,8 +75,8 @@
   .sbx-reprobe:hover { border-color: var(--primary); color: var(--primary); }
   .badge.info { background: var(--primary-soft); color: var(--primary); }
   /* 调度时区下拉 + 任务列表时区徽标 */
-  .tz-select { flex: none; border: none; border-radius: 0; max-width: 210px;
-               padding: 6px 8px; font-size: 12px; font-family: inherit;
+  .tz-select { flex: none; border: none; border-radius: 0; max-width: 132px;
+               padding: 6px 7px; font-size: 12px; font-family: inherit;
                color: var(--muted); background: #fff; cursor: pointer; }
   .tz-select:focus { outline: none; }
   .tz-chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px;
@@ -290,12 +290,12 @@
   .interval-group .lbl { color: var(--muted); font-size: 13px; }
 
   /* cron 表达式输入框（底部，与自定义同步） */
-  /* cron 表达式 + 时区下拉的组合框（一个框内左右两段：表达式 | 时区） */
-  .cron-tz-combo { display: flex; align-items: stretch; flex: 1 1 auto; min-width: 360px;
+  /* cron 表达式 + 时区下拉的组合框（一个框内左右两段：表达式 | 时区，紧凑不拉伸） */
+  .cron-tz-combo { display: flex; align-items: stretch; flex: 0 1 auto; min-width: 0;
                    border: 1px solid var(--border); border-radius: 8px; background: #fff;
                    overflow: hidden; transition: border-color .12s, box-shadow .12s; }
   .cron-tz-combo:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
-  .cron-tz-combo .expr-input { flex: 1; min-width: 0; padding: 6px 10px; font-family: var(--mono);
+  .cron-tz-combo .expr-input { flex: 1; min-width: 0; max-width: 170px; padding: 6px 10px; font-family: var(--mono);
                                font-size: 13px; color: var(--primary-deep); border: none;
                                border-radius: 0; background: transparent; box-shadow: none; }
   .cron-tz-combo .expr-input:focus { outline: none; }
@@ -521,33 +521,33 @@
                 <input type="text" id="cronPreviewText" class="expr-input" value="0 3 * * *" spellcheck="false" title="可直接编辑，修改后自动同步可视化选择">
                 <span class="combo-sep" aria-hidden="true"></span>
                 <select id="f_tz" class="tz-select" title="调度时区：默认跟随浏览器；留空跟随服务器；或选固定 UTC 偏移（不随夏令时变化）">
-                <option value="__browser__">跟随浏览器时区</option>
-                <option value="">跟随服务器时区</option>
+                <option value="__browser__">跟随浏览器</option>
+                <option value="">跟随服务器</option>
                 <optgroup label="东亚">
-                  <option value="UTC+8">UTC+8 · 北京/香港</option>
-                  <option value="UTC+9">UTC+9 · 东京/首尔</option>
-                  <option value="UTC+7">UTC+7 · 曼谷/雅加达</option>
+                  <option value="UTC+8">UTC+8 北京</option>
+                  <option value="UTC+9">UTC+9 东京</option>
+                  <option value="UTC+7">UTC+7 曼谷</option>
                 </optgroup>
                 <optgroup label="东南亚">
-                  <option value="UTC+8">UTC+8 · 新加坡/吉隆坡/马尼拉</option>
-                  <option value="UTC+7">UTC+7 · 河内/金边</option>
-                  <option value="UTC+6:30">UTC+6:30 · 仰光</option>
+                  <option value="UTC+8">UTC+8 新加坡</option>
+                  <option value="UTC+7">UTC+7 河内</option>
+                  <option value="UTC+6:30">UTC+6:30 仰光</option>
                 </optgroup>
                 <optgroup label="澳洲/大洋洲">
-                  <option value="UTC+10">UTC+10 · 悉尼/墨尔本</option>
-                  <option value="UTC+9:30">UTC+9:30 · 阿德莱德/达尔文</option>
-                  <option value="UTC+12">UTC+12 · 奥克兰/斐济</option>
+                  <option value="UTC+10">UTC+10 悉尼</option>
+                  <option value="UTC+9:30">UTC+9:30 阿德莱德</option>
+                  <option value="UTC+12">UTC+12 奥克兰</option>
                 </optgroup>
                 <optgroup label="欧洲">
-                  <option value="UTC+1">UTC+1 · 柏林/巴黎/罗马</option>
-                  <option value="UTC">UTC+0 · 伦敦/里斯本</option>
+                  <option value="UTC+1">UTC+1 柏林</option>
+                  <option value="UTC">UTC+0 伦敦</option>
                 </optgroup>
                 <optgroup label="美洲">
-                  <option value="UTC-5">UTC-5 · 纽约/多伦多</option>
-                  <option value="UTC-6">UTC-6 · 芝加哥/墨西哥城</option>
-                  <option value="UTC-7">UTC-7 · 丹佛</option>
-                  <option value="UTC-8">UTC-8 · 洛杉矶/温哥华</option>
-                  <option value="UTC-10">UTC-10 · 檀香山</option>
+                  <option value="UTC-5">UTC-5 纽约</option>
+                  <option value="UTC-6">UTC-6 芝加哥</option>
+                  <option value="UTC-7">UTC-7 丹佛</option>
+                  <option value="UTC-8">UTC-8 洛杉矶</option>
+                  <option value="UTC-10">UTC-10 檀香山</option>
                 </optgroup>
               </select>
               </span>
@@ -699,12 +699,12 @@ function fmtTzOffset(min) {
 function browserTzOffset() {
   return -new Date().getTimezoneOffset();
 }
-/** 让「跟随浏览器/跟随服务器」两个选项带上探测到的偏移（如 跟随浏览器时区 (UTC+8)） */
+/** 让「跟随浏览器/跟随服务器」两个选项带上探测到的偏移（如 跟随浏览器 UTC+8） */
 function refreshTzOptionLabels() {
   const b = $("f_tz").querySelector('option[value="__browser__"]');
-  if (b) b.textContent = "跟随浏览器时区 (" + fmtTzOffset(browserTzOffset()) + ")";
+  if (b) b.textContent = "跟随浏览器 " + fmtTzOffset(browserTzOffset());
   const s = $("f_tz").querySelector('option[value=""]');
-  if (s) s.textContent = "跟随服务器时区 (" + fmtTzOffset(SERVER_TZ_MIN) + ")";
+  if (s) s.textContent = "跟随服务器 " + fmtTzOffset(SERVER_TZ_MIN);
 }
 /** 按任务的 tz 值设置下拉：新任务默认跟随浏览器；存储的自定义偏移动态补选项 */
 function setTzSelect(tz) {
