@@ -349,6 +349,6 @@ export function buildSingleHistoryEntry(
     command: description,
     timedOut,
     ok,
-    results: [{ result: description, exit_code: exitCode }],
+    results: [{ client: "server", result: description, exit_code: exitCode }],
   };
 }
