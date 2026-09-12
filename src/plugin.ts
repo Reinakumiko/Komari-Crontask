@@ -777,11 +777,16 @@ function rpcRun(params: unknown): { ok: boolean; error?: string } {
   return { ok: true };
 }
 
-/** crontask.history -> recent history entries (newest first). Returns synchronously. */
-function rpcHistory(params: unknown): { history: HistoryEntry[] } {
-  const limit = Math.max(1, Math.min(200, Number((params as Record<string, unknown>)?.limit ?? 50) || 50));
+/** crontask.history -> history entries newest first, paged by { limit, offset }. Returns synchronously. */
+function rpcHistory(params: unknown): { history: HistoryEntry[]; total: number } {
+  const p = (params ?? {}) as Record<string, unknown>;
+  const limit = Math.max(1, Math.min(200, Number(p.limit ?? 50) || 50));
+  const offset = Math.max(0, Number(p.offset ?? 0) || 0);
   const items = loadHistorySync();
-  return { history: items.slice(-limit).reverse() };
+  const end = items.length - offset;
+  if (end <= 0) return { history: [], total: items.length };
+  const start = Math.max(0, end - limit);
+  return { history: items.slice(start, end).reverse(), total: items.length };
 }
 
 /** crontask.audit -> recent operation log (newest first). Returns synchronously. */

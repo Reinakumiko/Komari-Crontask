@@ -81,6 +81,9 @@
   .tz-select:focus { outline: none; }
   .tz-chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px;
              background: #e0f2fe; color: #0369a1; font-size: 10.5px; vertical-align: middle; }
+  /* 执行历史「加载更早」 */
+  .history-more { text-align: center; padding: 4px 0 10px; }
+  .history-more button { min-width: 200px; }
 
   .muted { color: var(--muted); }
   .mono  { font-family: var(--mono); }
@@ -415,6 +418,9 @@
       </span>
     </div>
     <div id="historyList"><div class="empty">加载中…</div></div>
+    <div class="history-more" id="historyMore" style="display:none">
+      <button class="ghost" id="btnHistoryMore">加载更早</button>
+    </div>
   </div>
 
   <div class="card">
@@ -1434,16 +1440,62 @@ async function refreshAudit() {
     $("auditList").innerHTML = '<div class="empty">操作日志加载失败: ' + esc(e.message) + "</div>";
   }
 }
+// ---------- 执行历史分页（追加式「加载更早」） ----------
+const HISTORY_PAGE = 50;
+let HISTORY_OFFSET = 0;   // 已加载的偏移（从最新往旧累计）
+let HISTORY_SHOWN = 0;    // 当前已渲染条数
+let HISTORY_TOTAL = 0;    // 服务端总条数
+
+function updateHistoryMore() {
+  const box = $("historyMore");
+  const btn = $("btnHistoryMore");
+  if (HISTORY_TOTAL === 0) { box.style.display = "none"; return; }
+  box.style.display = "block";
+  if (HISTORY_SHOWN < HISTORY_TOTAL) {
+    btn.disabled = false;
+    btn.textContent = `加载更早（还有 ${HISTORY_TOTAL - HISTORY_SHOWN} 条）`;
+  } else {
+    btn.disabled = true;
+    btn.textContent = "已到最早";
+  }
+}
+
 async function refreshHistory() {
   try {
-    const r = await rpc("crontask.history", { limit: 50 });
+    const r = await rpc("crontask.history", { limit: HISTORY_PAGE, offset: 0 });
     const items = r.history || [];
-    $("historyCount").textContent = items.length ? `共 ${items.length} 条` : "";
+    HISTORY_TOTAL = Number(r.total ?? items.length);
+    HISTORY_OFFSET = 0;
+    HISTORY_SHOWN = items.length;
+    $("historyCount").textContent = HISTORY_TOTAL ? `共 ${HISTORY_TOTAL} 条` : "";
     $("historyList").innerHTML = items.length
       ? items.map(h => historyItem(h, false)).join("")
       : '<div class="empty">暂无执行记录，任务触发后会显示在这里</div>';
+    updateHistoryMore();
   } catch (e) {
     $("historyList").innerHTML = '<div class="empty">历史加载失败: ' + esc(e.message) + "</div>";
+  }
+}
+
+async function loadMoreHistory() {
+  const btn = $("btnHistoryMore");
+  if (btn.disabled) return;
+  try {
+    btn.disabled = true;
+    btn.textContent = "加载中…";
+    const next = HISTORY_OFFSET + HISTORY_PAGE;
+    const r = await rpc("crontask.history", { limit: HISTORY_PAGE, offset: next });
+    const items = r.history || [];
+    HISTORY_TOTAL = Number(r.total ?? HISTORY_TOTAL);
+    if (items.length) {
+      $("historyList").innerHTML += items.map(h => historyItem(h, false)).join("");
+      HISTORY_OFFSET = next;
+      HISTORY_SHOWN += items.length;
+    }
+    updateHistoryMore();
+  } catch (e) {
+    toast("加载更早失败: " + e.message);
+    updateHistoryMore();
   }
 }
 $("historyList").addEventListener("click", (e) => {
@@ -1474,6 +1526,7 @@ $("btnToggleTime").addEventListener("click", () => {
   refreshHistory();
   refreshAudit();
 });
+$("btnHistoryMore").addEventListener("click", loadMoreHistory);
 updateTimeToggleLabel();
 
 // ---------- 初始化 ----------

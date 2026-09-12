@@ -441,3 +441,36 @@ test("exec failure (target node offline) records history with reason and notifie
   // 失败通知也应发出
   assert.ok(host.notifications.length >= 1, "failure notification should be sent");
 });
+
+test("crontask.history supports paged access by offset", async () => {
+  // 直接构造 6 条历史（时间序 H1..H6，H6 最新），绕开执行链路
+  const entries = [];
+  for (let i = 1; i <= 6; i++) {
+    entries.push({
+      taskId: `t${i}`, name: `H${i}`, type: "command", command: "echo x",
+      execTaskId: `exec-${i}`, ts: `2026-01-01T00:0${i}:00.000Z`, timedOut: false,
+      results: [{ client: "n1", result: "out", exit_code: 0 }],
+    });
+  }
+  await fs.promises.writeFile(path.join(STORAGE, "history.json"), JSON.stringify(entries));
+  await writeTasks([]);
+  await bootPlugin();
+  // 全量：最新在前
+  const all = await rpc("crontask.history", { limit: 50 });
+  assert.equal(all.total, 6);
+  assert.deepEqual(all.history.map((h) => h.name), ["H6", "H5", "H4", "H3", "H2", "H1"]);
+  // 第一页 limit 2
+  const p1 = await rpc("crontask.history", { limit: 2, offset: 0 });
+  assert.deepEqual(p1.history.map((h) => h.name), ["H6", "H5"]);
+  assert.equal(p1.total, 6);
+  // 第二页 offset 2
+  const p2 = await rpc("crontask.history", { limit: 2, offset: 2 });
+  assert.deepEqual(p2.history.map((h) => h.name), ["H4", "H3"]);
+  // 尾页：不足一页
+  const p3 = await rpc("crontask.history", { limit: 2, offset: 4 });
+  assert.deepEqual(p3.history.map((h) => h.name), ["H2", "H1"]);
+  // 越界 → 空
+  const p9 = await rpc("crontask.history", { limit: 2, offset: 99 });
+  assert.equal(p9.history.length, 0);
+  assert.equal(p9.total, 6);
+});

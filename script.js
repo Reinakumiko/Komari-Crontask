@@ -1254,9 +1254,14 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
     return { ok: true };
   }
   function rpcHistory(params) {
-    const limit = Math.max(1, Math.min(200, Number(params?.limit ?? 50) || 50));
+    const p = params ?? {};
+    const limit = Math.max(1, Math.min(200, Number(p.limit ?? 50) || 50));
+    const offset = Math.max(0, Number(p.offset ?? 0) || 0);
     const items = loadHistorySync();
-    return { history: items.slice(-limit).reverse() };
+    const end = items.length - offset;
+    if (end <= 0) return { history: [], total: items.length };
+    const start = Math.max(0, end - limit);
+    return { history: items.slice(start, end).reverse(), total: items.length };
   }
   function rpcAudit(params) {
     const limit = Math.max(1, Math.min(500, Number(params?.limit ?? 100) || 100));
