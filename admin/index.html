@@ -90,7 +90,6 @@
   .pg-btn:hover:not(:disabled):not(.active) { border-color: var(--primary); color: var(--primary); }
   .pg-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
   .pg-btn:disabled { opacity: .45; cursor: default; }
-  .pg-info { color: var(--muted); font-size: 12.5px; padding: 0 6px; }
 
   .muted { color: var(--muted); }
   .mono  { font-family: var(--mono); }
@@ -1460,7 +1459,6 @@ function renderHistoryPager() {
   box.style.display = "flex";
   box.innerHTML =
     `<button class="pg-btn" data-pg="${HISTORY_PAGE_NO - 1}" ${HISTORY_PAGE_NO <= 1 ? "disabled" : ""}>‹ 上一页</button>` +
-    `<span class="pg-info">第 ${HISTORY_PAGE_NO} / ${pages} 页 · 共 ${HISTORY_TOTAL} 条</span>` +
     `<button class="pg-btn" data-pg="${HISTORY_PAGE_NO + 1}" ${HISTORY_PAGE_NO >= pages ? "disabled" : ""}>下一页 ›</button>`;
 }
 
