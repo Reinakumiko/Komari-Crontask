@@ -90,7 +90,7 @@
   .pg-btn:hover:not(:disabled):not(.active) { border-color: var(--primary); color: var(--primary); }
   .pg-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
   .pg-btn:disabled { opacity: .45; cursor: default; }
-  .pg-gap { color: var(--faint); padding: 0 2px; }
+  .pg-info { color: var(--muted); font-size: 12.5px; padding: 0 6px; }
 
   .muted { color: var(--muted); }
   .mono  { font-family: var(--mono); }
@@ -1453,35 +1453,15 @@ const HISTORY_PAGE = 50;
 let HISTORY_PAGE_NO = 1;  // 当前页（1 起）
 let HISTORY_TOTAL = 0;    // 服务端总条数
 
-/** 生成页码按钮序列：1 … c-1 c c+1 … N（页数少时全列） */
-function pagerSequence(current, pages) {
-  const seq = [];
-  const push = (v) => seq.push(v);
-  if (pages <= 7) {
-    for (let i = 1; i <= pages; i++) push(i);
-    return seq;
-  }
-  push(1);
-  if (current > 3) push("…");
-  for (let i = Math.max(2, current - 1); i <= Math.min(pages - 1, current + 1); i++) push(i);
-  if (current < pages - 2) push("…");
-  push(pages);
-  return seq;
-}
-
 function renderHistoryPager() {
   const box = $("historyPager");
   if (HISTORY_TOTAL === 0) { box.style.display = "none"; return; }
   const pages = Math.max(1, Math.ceil(HISTORY_TOTAL / HISTORY_PAGE));
   box.style.display = "flex";
-  const parts = [];
-  parts.push(`<button class="pg-btn" data-pg="${HISTORY_PAGE_NO - 1}" ${HISTORY_PAGE_NO <= 1 ? "disabled" : ""}>‹ 上一页</button>`);
-  for (const v of pagerSequence(HISTORY_PAGE_NO, pages)) {
-    if (v === "…") parts.push('<span class="pg-gap">…</span>');
-    else parts.push(`<button class="pg-btn ${v === HISTORY_PAGE_NO ? "active" : ""}" data-pg="${v}">${v}</button>`);
-  }
-  parts.push(`<button class="pg-btn" data-pg="${HISTORY_PAGE_NO + 1}" ${HISTORY_PAGE_NO >= pages ? "disabled" : ""}>下一页 ›</button>`);
-  box.innerHTML = parts.join("");
+  box.innerHTML =
+    `<button class="pg-btn" data-pg="${HISTORY_PAGE_NO - 1}" ${HISTORY_PAGE_NO <= 1 ? "disabled" : ""}>‹ 上一页</button>` +
+    `<span class="pg-info">第 ${HISTORY_PAGE_NO} / ${pages} 页 · 共 ${HISTORY_TOTAL} 条</span>` +
+    `<button class="pg-btn" data-pg="${HISTORY_PAGE_NO + 1}" ${HISTORY_PAGE_NO >= pages ? "disabled" : ""}>下一页 ›</button>`;
 }
 
 /** 渲染第 page 页（1 起），替换整个列表 */
