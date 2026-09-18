@@ -356,21 +356,27 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
     effective.nodes,
     effective.timeout,
   );
-  // 失联节点：命令执行后节点掉线（典型：reboot/断网类命令），结果无法上报。
-  // 补一条明确的结果行，而不是让用户面对干巴巴的「未返回/超时」。
+  // 失联节点：命令已下发，执行后节点掉线（典型：reboot/断网类命令——失联恰恰
+  // 说明命令在跑）。结果未知是中性状态，不算失败、不触发失败通知。
   if (lost.length > 0) {
     const lostSet = new Set(lost);
     const patched = results.map((r) =>
       lostSet.has(r.client) && (r.exit_code === null || r.exit_code === undefined)
-        ? { ...r, result: "命令执行后节点失联，结果未上报（常见于重启/断网类命令）", exit_code: -3 as number | null }
+        ? {
+            ...r,
+            result: "已下发 · 执行后节点失联 · 结果未知（重启/断网类命令的预期表现）",
+            exit_code: null,
+            lost: true,
+          }
         : r,
     );
     for (const uuid of lost) {
       if (!patched.some((r) => r.client === uuid)) {
         patched.push({
           client: uuid,
-          result: "命令执行后节点失联，结果未上报（常见于重启/断网类命令）",
-          exit_code: -3,
+          result: "已下发 · 执行后节点失联 · 结果未知（重启/断网类命令的预期表现）",
+          exit_code: null,
+          lost: true,
         });
       }
     }
@@ -634,7 +640,16 @@ async function pollTaskResults(
   taskId: string,
   expectedClients: string[],
   timeoutSeconds: number,
+  opts?: { pollIntervalMs?: number; statusEveryN?: number; lostStreak?: number },
 ): Promise<{ results: TaskResult[]; timedOut: boolean; lost: string[] }> {
+  // 测试注入点：宿主/Node 测试可通过 globalThis.__crontaskPollTuning 加速轮询节奏
+  const tuning = (globalThis as Record<string, unknown>).__crontaskPollTuning as
+    | { pollIntervalMs?: number; statusEveryN?: number; lostStreak?: number }
+    | undefined;
+  const merged = { ...(tuning ?? {}), ...(opts ?? {}) };
+  const pollIntervalMs = merged.pollIntervalMs ?? POLL_INTERVAL_MS;
+  const statusEveryN = merged.statusEveryN ?? 5;
+  const lostStreakThreshold = merged.lostStreak ?? 3;
   const deadline = Date.now() + timeoutSeconds * 1000;
   let pollCount = 0;
   let offlineStreak = 0;
@@ -666,7 +681,7 @@ async function pollTaskResults(
     // 全部离线（约 30s 确认）时提前结束——典型场景是 reboot/断网类命令把
     // 节点自身搞掉线，结果永远无法上报，傻等超时没有意义。
     pollCount++;
-    if (pollCount % 5 === 4) {
+    if (pollCount % statusEveryN === statusEveryN - 1) {
       try {
         const status = await server.call<Record<string, unknown>>(
           "common:getNodesLatestStatus",
@@ -679,7 +694,7 @@ async function pollTaskResults(
         });
         if (pending.length > 0 && pending.every((u) => !online.has(u))) {
           offlineStreak++;
-          if (offlineStreak >= 3) {
+          if (offlineStreak >= lostStreakThreshold) {
             console.log(
               `[crontask] task round ${taskId}: pending nodes ${pending.join(",")} lost connection, ending poll early`,
             );
@@ -692,7 +707,7 @@ async function pollTaskResults(
         // 状态查询失败不影响主流程
       }
     }
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 }
 

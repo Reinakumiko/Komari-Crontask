@@ -9,6 +9,8 @@ export type TaskResult = {
   result: string;
   exit_code: number | null;
   finished_at?: string;
+  /** true = 命令下发后节点失联，结果未知（重启/断网类命令的预期表现），不算失败 */
+  lost?: boolean;
 };
 
 /** 单次执行结果（统一形状：command 有节点结果，sandbox/action 单条） */
@@ -299,11 +301,13 @@ export function previewResult(result: string): string {
   return s.length > 500 ? s.slice(0, 500) + "…" : s;
 }
 
-/** True when the round counts as failed (any non-zero/unset exit or no runs). */
+/** True when the round counts as failed (any non-zero/unset exit, excluding lost nodes). */
 export function isFailure(results: TaskResult[]): boolean {
   if (results.length === 0) return true;
   return results.some(
-    (r) => r.exit_code === null || r.exit_code === undefined || r.exit_code !== 0,
+    (r) =>
+      !r.lost &&
+      (r.exit_code === null || r.exit_code === undefined || r.exit_code !== 0),
   );
 }
 
@@ -328,6 +332,7 @@ export function buildHistoryEntry(
       client: r.client,
       result: r.result,
       exit_code: r.exit_code,
+      ...(r.lost ? { lost: true } : {}),
     })),
   };
 }

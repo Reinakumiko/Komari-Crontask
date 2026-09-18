@@ -617,7 +617,7 @@
   function isFailure(results) {
     if (results.length === 0) return true;
     return results.some(
-      (r) => r.exit_code === null || r.exit_code === void 0 || r.exit_code !== 0
+      (r) => !r.lost && (r.exit_code === null || r.exit_code === void 0 || r.exit_code !== 0)
     );
   }
   function buildHistoryEntry(task, execTaskId, results, timedOut, now = (/* @__PURE__ */ new Date()).toISOString()) {
@@ -633,7 +633,8 @@
       results: results.map((r) => ({
         client: r.client,
         result: r.result,
-        exit_code: r.exit_code
+        exit_code: r.exit_code,
+        ...r.lost ? { lost: true } : {}
       }))
     };
   }
@@ -882,14 +883,20 @@
     if (lost.length > 0) {
       const lostSet = new Set(lost);
       const patched = results.map(
-        (r) => lostSet.has(r.client) && (r.exit_code === null || r.exit_code === void 0) ? { ...r, result: "\u547D\u4EE4\u6267\u884C\u540E\u8282\u70B9\u5931\u8054\uFF0C\u7ED3\u679C\u672A\u4E0A\u62A5\uFF08\u5E38\u89C1\u4E8E\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\uFF09", exit_code: -3 } : r
+        (r) => lostSet.has(r.client) && (r.exit_code === null || r.exit_code === void 0) ? {
+          ...r,
+          result: "\u5DF2\u4E0B\u53D1 \xB7 \u6267\u884C\u540E\u8282\u70B9\u5931\u8054 \xB7 \u7ED3\u679C\u672A\u77E5\uFF08\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\u7684\u9884\u671F\u8868\u73B0\uFF09",
+          exit_code: null,
+          lost: true
+        } : r
       );
       for (const uuid of lost) {
         if (!patched.some((r) => r.client === uuid)) {
           patched.push({
             client: uuid,
-            result: "\u547D\u4EE4\u6267\u884C\u540E\u8282\u70B9\u5931\u8054\uFF0C\u7ED3\u679C\u672A\u4E0A\u62A5\uFF08\u5E38\u89C1\u4E8E\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\uFF09",
-            exit_code: -3
+            result: "\u5DF2\u4E0B\u53D1 \xB7 \u6267\u884C\u540E\u8282\u70B9\u5931\u8054 \xB7 \u7ED3\u679C\u672A\u77E5\uFF08\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\u7684\u9884\u671F\u8868\u73B0\uFF09",
+            exit_code: null,
+            lost: true
           });
         }
       }
@@ -1131,7 +1138,12 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
     }
     return String(result).slice(0, 200);
   }
-  async function pollTaskResults(taskId, expectedClients, timeoutSeconds) {
+  async function pollTaskResults(taskId, expectedClients, timeoutSeconds, opts) {
+    const tuning = globalThis.__crontaskPollTuning;
+    const merged = { ...tuning ?? {}, ...opts ?? {} };
+    const pollIntervalMs = merged.pollIntervalMs ?? POLL_INTERVAL_MS;
+    const statusEveryN = merged.statusEveryN ?? 5;
+    const lostStreakThreshold = merged.lostStreak ?? 3;
     const deadline = Date.now() + timeoutSeconds * 1e3;
     let pollCount = 0;
     let offlineStreak = 0;
@@ -1154,7 +1166,7 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
         return { results, timedOut: !done, lost: [] };
       }
       pollCount++;
-      if (pollCount % 5 === 4) {
+      if (pollCount % statusEveryN === statusEveryN - 1) {
         try {
           const status = await import_plugin_sdk.server.call(
             "common:getNodesLatestStatus",
@@ -1167,7 +1179,7 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
           });
           if (pending.length > 0 && pending.every((u) => !online.has(u))) {
             offlineStreak++;
-            if (offlineStreak >= 3) {
+            if (offlineStreak >= lostStreakThreshold) {
               console.log(
                 `[crontask] task round ${taskId}: pending nodes ${pending.join(",")} lost connection, ending poll early`
               );
@@ -1179,7 +1191,7 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
         } catch {
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
     }
   }
   async function buildFailureMessage(entry) {

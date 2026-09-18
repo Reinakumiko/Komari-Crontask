@@ -115,6 +115,10 @@ function createServerModule() {
         case "common:getNodes": {
           return { n1: { uuid: "n1", name: "Node One" } } as T;
         }
+        case "common:getNodesLatestStatus": {
+          // 返回「最近上报过状态的节点」：n1 在线，其余（如 lost-1）不在线
+          return { n1: { uuid: "n1" } } as T;
+        }
         default:
           throw new Error(`unexpected method: ${method}`);
       }
@@ -473,4 +477,34 @@ test("crontask.history supports paged access by offset", async () => {
   const p9 = await rpc("crontask.history", { limit: 2, offset: 99 });
   assert.equal(p9.history.length, 0);
   assert.equal(p9.total, 6);
+});
+
+test("lost node (reboot-style) ends poll early as unknown, not failure", async () => {
+  // 加速轮询节奏（仅本测试）
+  (globalThis as Record<string, unknown>).__crontaskPollTuning = { pollIntervalMs: 10, statusEveryN: 1, lostStreak: 2 };
+  try {
+    await writeTasks([]);
+    await bootPlugin();
+    // lost-1 不在 getNodesLatestStatus 里 = 离线；结果行永远 null
+    host.taskResults["tid-1"] = [{ client: "lost-1", result: "", exit_code: null }];
+    const saved = await rpc("crontask.save", makeTask({
+      id: "", name: "RebootJob", command: "reboot", nodes: ["lost-1"],
+    }));
+    assert.equal(saved.ok, true);
+    const list = await rpc("crontask.list");
+    await rpc("crontask.run", { id: list.tasks[0].id });
+    await new Promise((r) => setTimeout(r, 300));
+    const history = await rpc("crontask.history", { limit: 5 });
+    const entry = history.history.find((h) => h.name === "RebootJob");
+    assert.ok(entry, "lost-node round should be recorded");
+    const row = entry.results[0];
+    assert.equal(row.client, "lost-1");
+    assert.equal(row.lost, true);
+    assert.equal(row.exit_code, null); // 未知，不是失败码
+    assert.match(row.result, /结果未知/);
+    // 「不算失败」的证据：无失败通知发出（isFailure 对 lost-only 轮返回 false）
+    assert.equal(host.notifications.length, 0, "no failure notification for lost nodes");
+  } finally {
+    delete (globalThis as Record<string, unknown>).__crontaskPollTuning;
+  }
 });
