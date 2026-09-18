@@ -351,11 +351,31 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
     return;
   }
 
-  const { results, timedOut } = await pollTaskResults(
+  const { results, timedOut, lost } = await pollTaskResults(
     taskId,
     effective.nodes,
     effective.timeout,
   );
+  // 失联节点：命令执行后节点掉线（典型：reboot/断网类命令），结果无法上报。
+  // 补一条明确的结果行，而不是让用户面对干巴巴的「未返回/超时」。
+  if (lost.length > 0) {
+    const lostSet = new Set(lost);
+    const patched = results.map((r) =>
+      lostSet.has(r.client) && (r.exit_code === null || r.exit_code === undefined)
+        ? { ...r, result: "命令执行后节点失联，结果未上报（常见于重启/断网类命令）", exit_code: -3 as number | null }
+        : r,
+    );
+    for (const uuid of lost) {
+      if (!patched.some((r) => r.client === uuid)) {
+        patched.push({
+          client: uuid,
+          result: "命令执行后节点失联，结果未上报（常见于重启/断网类命令）",
+          exit_code: -3,
+        });
+      }
+    }
+    results.splice(0, results.length, ...patched);
+  }
   const entry = buildHistoryEntry(effective, taskId, results, timedOut);
   appendHistorySync(entry);
 
@@ -614,8 +634,10 @@ async function pollTaskResults(
   taskId: string,
   expectedClients: string[],
   timeoutSeconds: number,
-): Promise<{ results: TaskResult[]; timedOut: boolean }> {
+): Promise<{ results: TaskResult[]; timedOut: boolean; lost: string[] }> {
   const deadline = Date.now() + timeoutSeconds * 1000;
+  let pollCount = 0;
+  let offlineStreak = 0;
   const expected = new Set(expectedClients);
   let results: TaskResult[] = [];
   for (;;) {
@@ -638,7 +660,37 @@ async function pollTaskResults(
         );
       });
     if (done || Date.now() >= deadline) {
-      return { results, timedOut: !done };
+      return { results, timedOut: !done, lost: [] };
+    }
+    // 失联检测：每 5 轮（约 10s）查一次节点在线状态。未完成节点连续 3 次
+    // 全部离线（约 30s 确认）时提前结束——典型场景是 reboot/断网类命令把
+    // 节点自身搞掉线，结果永远无法上报，傻等超时没有意义。
+    pollCount++;
+    if (pollCount % 5 === 4) {
+      try {
+        const status = await server.call<Record<string, unknown>>(
+          "common:getNodesLatestStatus",
+          {},
+        );
+        const online = new Set(Object.keys(status ?? {}));
+        const pending = [...expected].filter((uuid) => {
+          const row = reported.get(uuid);
+          return row === undefined || row.exit_code === null || row.exit_code === undefined;
+        });
+        if (pending.length > 0 && pending.every((u) => !online.has(u))) {
+          offlineStreak++;
+          if (offlineStreak >= 3) {
+            console.log(
+              `[crontask] task round ${taskId}: pending nodes ${pending.join(",")} lost connection, ending poll early`,
+            );
+            return { results, timedOut: true, lost: pending };
+          }
+        } else {
+          offlineStreak = 0;
+        }
+      } catch {
+        // 状态查询失败不影响主流程
+      }
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }

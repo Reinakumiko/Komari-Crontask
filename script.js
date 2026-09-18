@@ -874,11 +874,27 @@
 \u6267\u884C\u4E0B\u53D1\u5931\u8D25: ${humanizeExecError(raw)}`);
       return;
     }
-    const { results, timedOut } = await pollTaskResults(
+    const { results, timedOut, lost } = await pollTaskResults(
       taskId,
       effective.nodes,
       effective.timeout
     );
+    if (lost.length > 0) {
+      const lostSet = new Set(lost);
+      const patched = results.map(
+        (r) => lostSet.has(r.client) && (r.exit_code === null || r.exit_code === void 0) ? { ...r, result: "\u547D\u4EE4\u6267\u884C\u540E\u8282\u70B9\u5931\u8054\uFF0C\u7ED3\u679C\u672A\u4E0A\u62A5\uFF08\u5E38\u89C1\u4E8E\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\uFF09", exit_code: -3 } : r
+      );
+      for (const uuid of lost) {
+        if (!patched.some((r) => r.client === uuid)) {
+          patched.push({
+            client: uuid,
+            result: "\u547D\u4EE4\u6267\u884C\u540E\u8282\u70B9\u5931\u8054\uFF0C\u7ED3\u679C\u672A\u4E0A\u62A5\uFF08\u5E38\u89C1\u4E8E\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\uFF09",
+            exit_code: -3
+          });
+        }
+      }
+      results.splice(0, results.length, ...patched);
+    }
     const entry = buildHistoryEntry(effective, taskId, results, timedOut);
     appendHistorySync(entry);
     if (isFailure(results)) {
@@ -1117,6 +1133,8 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
   }
   async function pollTaskResults(taskId, expectedClients, timeoutSeconds) {
     const deadline = Date.now() + timeoutSeconds * 1e3;
+    let pollCount = 0;
+    let offlineStreak = 0;
     const expected = new Set(expectedClients);
     let results = [];
     for (; ; ) {
@@ -1133,7 +1151,33 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
         return row !== void 0 && row.exit_code !== null && row.exit_code !== void 0;
       });
       if (done || Date.now() >= deadline) {
-        return { results, timedOut: !done };
+        return { results, timedOut: !done, lost: [] };
+      }
+      pollCount++;
+      if (pollCount % 5 === 4) {
+        try {
+          const status = await import_plugin_sdk.server.call(
+            "common:getNodesLatestStatus",
+            {}
+          );
+          const online = new Set(Object.keys(status ?? {}));
+          const pending = [...expected].filter((uuid) => {
+            const row = reported.get(uuid);
+            return row === void 0 || row.exit_code === null || row.exit_code === void 0;
+          });
+          if (pending.length > 0 && pending.every((u) => !online.has(u))) {
+            offlineStreak++;
+            if (offlineStreak >= 3) {
+              console.log(
+                `[crontask] task round ${taskId}: pending nodes ${pending.join(",")} lost connection, ending poll early`
+              );
+              return { results, timedOut: true, lost: pending };
+            }
+          } else {
+            offlineStreak = 0;
+          }
+        } catch {
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     }

@@ -1160,7 +1160,7 @@ function openForm(task) {
   $("f_sandbox_strict").checked = task ? task.sandboxStrict !== false : true;
   $("f_action_method").value = task?.actionMethod ?? "";
   $("f_action_params").value = task?.actionParams ?? "{}";
-  setTzSelect(task?.tz ?? "");
+  setTzSelect(task ? task.tz : undefined);
   setType(task?.type === "sandbox" || task?.type === "action" ? task.type : "command");
   selectedNodes = new Set(task?.nodes ?? []);
   $("nodeFilter").value = "";
@@ -1337,7 +1337,16 @@ async function onTaskAction(act, id) {
       case "run": {
         await rpc("crontask.run", { id, _operator: CURRENT_USER });
         toast("已触发执行");
-        setTimeout(refreshHistory, 4000);
+        // 持续刷新直到新历史出现（command 任务轮询可能远超 4s，单次刷新会错过）
+        const before = HISTORY_TOTAL;
+        let tries = 0;
+        const poll = async () => {
+          tries++;
+          await refreshHistory();
+          if (HISTORY_TOTAL > before || tries > 20) return;
+          setTimeout(poll, 3000);
+        };
+        setTimeout(poll, 3000);
         break;
       }
       case "edit": {
