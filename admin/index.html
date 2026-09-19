@@ -1570,34 +1570,34 @@ $("typeTabs").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-t]");
   if (btn) setType(btn.dataset.t);
 });
-// 命令模板：把当前命令包装成对应写法（已是该写法则解包还原）
-const TPL_PATTERNS = {
-  direct: { re: null, wrap: (c) => c },
-  background: { re: /^\((.*)\)\s*(?:>\S+\s*\S+\s*)?&\s*$/, wrap: (c) => `(${c}) >/dev/null 2>&1 &` },
-  delay: { re: /^\(\s*sleep\s+(\d+)\s*;\s*(.*)\s*\)\s*(?:>\S+\s*\S+\s*)?&\s*$/, wrap: (c) => `(sleep 30; ${c}) >/dev/null 2>&1 &` },
-};
+// 命令模板：包装/解包断联命令写法。delay 是 background 的语法子集，
+// 判定顺序必须 delay 优先（否则延迟格式会被后台正则贪婪吞掉 sleep 部分）。
+const DELAY_RE = /^\(\s*sleep\s+\d+\s*;\s*(.+?)\s*\)\s*(?:>\S+\s*\S+\s*)?&\s*$/;
+const BG_RE = /^\((.+)\)\s*(?:>\S+\s*\S+\s*)?&\s*$/;
+function unwrapCommand(raw) {
+  const d = raw.match(DELAY_RE);
+  if (d) return { mode: "delay", inner: d[1].trim() };
+  const b = raw.match(BG_RE);
+  if (b) return { mode: "background", inner: b[1].trim() };
+  return { mode: "direct", inner: raw };
+}
 document.querySelectorAll(".tpl-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const mode = btn.dataset.tpl;
     const ta = $("f_command");
     const raw = ta.value.trim();
     if (!raw) { toast("先填写命令，再套用模板"); return; }
+    const u = unwrapCommand(raw);
     if (mode === "direct") {
-      // 解包任何包装
-      for (const p of [TPL_PATTERNS.background.re, TPL_PATTERNS.delay.re]) {
-        if (p) { const m = raw.match(p); if (m) { ta.value = m[1] ?? m[2]; toast("已还原为直接执行"); return; } }
-      }
-      toast("当前已是直接执行写法");
+      if (u.mode === "direct") { toast("当前已是直接执行写法"); return; }
+      ta.value = u.inner;
+      toast("已还原为直接执行");
       return;
     }
-    const tpl = TPL_PATTERNS[mode];
-    if (tpl.re && tpl.re.test(raw)) { toast("当前已是该写法"); return; }
-    // 先解包旧包装再套新模板
-    let inner = raw;
-    for (const p of [TPL_PATTERNS.background.re, TPL_PATTERNS.delay.re]) {
-      if (p) { const m = raw.match(p); if (m) { inner = m[1] ?? m[2]; break; } }
-    }
-    ta.value = tpl.wrap(inner);
+    if (u.mode === mode) { toast("当前已是该写法"); return; }
+    ta.value = mode === "background"
+      ? `(${u.inner}) >/dev/null 2>&1 &`
+      : `(sleep 30; ${u.inner}) >/dev/null 2>&1 &`;
     toast(mode === "background" ? "已包装为后台执行" : "已包装为延迟 30s 执行");
   });
 });
