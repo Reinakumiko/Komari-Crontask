@@ -172,10 +172,12 @@ test("previewResult: collapses whitespace and truncates long output", () => {
   assert.equal(previewResult(""), "");
 });
 
-test("isFailure: non-zero, null, or no results means failure", () => {
+test("isFailure: only explicit non-zero counts as failure", () => {
   assert.equal(isFailure([]), true);
   assert.equal(isFailure([{ client: "n1", result: "", exit_code: 1 }]), true);
-  assert.equal(isFailure([{ client: "n1", result: "", exit_code: null }]), true);
+  // 无失败回报（null）= 视为成功（reboot/断网类命令语义）
+  assert.equal(isFailure([{ client: "n1", result: "", exit_code: null }]), false);
+  assert.equal(isFailure([{ client: "n1", result: "", exit_code: null, lost: true }]), false);
   assert.equal(isFailure([
     { client: "n1", result: "", exit_code: 0 },
     { client: "n2", result: "", exit_code: 1 },

@@ -1379,8 +1379,11 @@ $("tasksBody").addEventListener("click", (e) => {
 // ---------- 执行历史（可展开） ----------
 function nodeResultBlock(r) {
   const exit = r.exit_code;
-  const exitCls = r.lost ? "zero" : exit === 0 ? "zero" : "nonzero";
-  const exitText = r.lost ? "已生效" : exit === null || exit === undefined ? "未返回" : `exit ${exit}`;
+  // 失联=已生效；未返回（无失败回报）=视为成功；只有明确非 0 才是失败
+  const exitCls = exit !== null && exit !== undefined && exit !== 0 ? "nonzero" : "zero";
+  const exitText = r.lost ? "已生效"
+    : exit === null || exit === undefined ? "视为成功"
+    : `exit ${exit}`;
   // 宿主写回的下发错误翻译成人话（如离线节点）
   const out = String(r.result ?? "").replace(/GoError: No clients connected/gi, "目标节点均离线，命令未下发");
   // 无 client 的单条结果（sandbox/action/下发失败）：显示 Server 标识
@@ -1397,10 +1400,13 @@ function nodeResultBlock(r) {
   </div>`;
 }
 function historyItem(h, open) {
-  const failed = h.results.some((r) => r.exit_code !== 0 && !r.lost);
-  const verdict = (h.timedOut
-    ? '<span class="badge warn">超时</span>'
-    : failed ? '<span class="badge fail">失败</span>' : '<span class="badge ok">成功</span>')
+  // 语义：只有明确的失败回报（exit_code 非 0）才失败；未返回/失联/超时视为成功
+  const failed = h.results.some((r) => r.exit_code !== null && r.exit_code !== undefined && r.exit_code !== 0);
+  const verdict = (failed
+    ? '<span class="badge fail">失败</span>'
+    : h.timedOut
+      ? '<span class="badge ok">成功</span><span class="badge warn">超时未返</span>'
+      : '<span class="badge ok">成功</span>')
     + (h.type === "sandbox" ? ' <span class="badge warn">沙箱</span>' : h.type === "action" ? ' <span class="badge info">系统功能</span>' : "");
   const absTime = new Date(h.ts).toLocaleString();
   const results = h.results.length

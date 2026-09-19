@@ -617,7 +617,7 @@
   function isFailure(results) {
     if (results.length === 0) return true;
     return results.some(
-      (r) => !r.lost && (r.exit_code === null || r.exit_code === void 0 || r.exit_code !== 0)
+      (r) => r.exit_code !== null && r.exit_code !== void 0 && r.exit_code !== 0
     );
   }
   function buildHistoryEntry(task, execTaskId, results, timedOut, now = (/* @__PURE__ */ new Date()).toISOString()) {
@@ -901,6 +901,16 @@
         }
       }
       results.splice(0, results.length, ...patched);
+    }
+    if (timedOut) {
+      for (let i = 0; i < results.length; i++) {
+        if (results[i].exit_code === null || results[i].exit_code === void 0) {
+          results[i] = {
+            ...results[i],
+            result: "\u672A\u8FD4\u56DE \xB7 \u65E0\u5931\u8D25\u56DE\u62A5 \xB7 \u89C6\u4E3A\u6210\u529F"
+          };
+        }
+      }
     }
     const entry = buildHistoryEntry(effective, taskId, results, timedOut);
     appendHistorySync(entry);

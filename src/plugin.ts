@@ -382,6 +382,17 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
     }
     results.splice(0, results.length, ...patched);
   }
+  // 超时仍未返回（节点在线但没回话）：无失败回报，视为成功。
+  if (timedOut) {
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].exit_code === null || results[i].exit_code === undefined) {
+        results[i] = {
+          ...results[i],
+          result: "未返回 · 无失败回报 · 视为成功",
+        };
+      }
+    }
+  }
   const entry = buildHistoryEntry(effective, taskId, results, timedOut);
   appendHistorySync(entry);
 

@@ -301,13 +301,15 @@ export function previewResult(result: string): string {
   return s.length > 500 ? s.slice(0, 500) + "…" : s;
 }
 
-/** True when the round counts as failed (any non-zero/unset exit, excluding lost nodes). */
+/**
+ * True when the round counts as failed. 语义：只有明确的失败回报（exit_code
+ * 非 0）才算失败；未返回/超时/失联（null）一律视为成功——reboot/断网类命令
+ * 没有消息就是好消息，真失败通常会有非 0 退出码回报。
+ */
 export function isFailure(results: TaskResult[]): boolean {
   if (results.length === 0) return true;
   return results.some(
-    (r) =>
-      !r.lost &&
-      (r.exit_code === null || r.exit_code === undefined || r.exit_code !== 0),
+    (r) => r.exit_code !== null && r.exit_code !== undefined && r.exit_code !== 0,
   );
 }
 
