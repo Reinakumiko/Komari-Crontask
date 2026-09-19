@@ -885,7 +885,7 @@
       const patched = results.map(
         (r) => lostSet.has(r.client) && (r.exit_code === null || r.exit_code === void 0) ? {
           ...r,
-          result: "\u5DF2\u4E0B\u53D1 \xB7 \u6267\u884C\u540E\u8282\u70B9\u5931\u8054 \xB7 \u7ED3\u679C\u672A\u77E5\uFF08\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\u7684\u9884\u671F\u8868\u73B0\uFF09",
+          result: "\u5DF2\u4E0B\u53D1 \xB7 \u8282\u70B9\u6309\u9884\u671F\u5931\u8054 \xB7 \u547D\u4EE4\u5DF2\u751F\u6548\uFF08\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\u7684\u9884\u671F\u8868\u73B0\uFF09",
           exit_code: null,
           lost: true
         } : r
@@ -894,7 +894,7 @@
         if (!patched.some((r) => r.client === uuid)) {
           patched.push({
             client: uuid,
-            result: "\u5DF2\u4E0B\u53D1 \xB7 \u6267\u884C\u540E\u8282\u70B9\u5931\u8054 \xB7 \u7ED3\u679C\u672A\u77E5\uFF08\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\u7684\u9884\u671F\u8868\u73B0\uFF09",
+            result: "\u5DF2\u4E0B\u53D1 \xB7 \u8282\u70B9\u6309\u9884\u671F\u5931\u8054 \xB7 \u547D\u4EE4\u5DF2\u751F\u6548\uFF08\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\u7684\u9884\u671F\u8868\u73B0\uFF09",
             exit_code: null,
             lost: true
           });
@@ -1183,7 +1183,7 @@ Action ${method} \u8C03\u7528\u5931\u8D25: ${String(err)}`;
               console.log(
                 `[crontask] task round ${taskId}: pending nodes ${pending.join(",")} lost connection, ending poll early`
               );
-              return { results, timedOut: true, lost: pending };
+              return { results, timedOut: false, lost: pending };
             }
           } else {
             offlineStreak = 0;

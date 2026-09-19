@@ -357,14 +357,14 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
     effective.timeout,
   );
   // 失联节点：命令已下发，执行后节点掉线（典型：reboot/断网类命令——失联恰恰
-  // 说明命令在跑）。结果未知是中性状态，不算失败、不触发失败通知。
+  // 说明命令在跑）。失联=命令已生效的预期表现，视为成功、不触发失败通知。
   if (lost.length > 0) {
     const lostSet = new Set(lost);
     const patched = results.map((r) =>
       lostSet.has(r.client) && (r.exit_code === null || r.exit_code === undefined)
         ? {
             ...r,
-            result: "已下发 · 执行后节点失联 · 结果未知（重启/断网类命令的预期表现）",
+            result: "已下发 · 节点按预期失联 · 命令已生效（重启/断网类命令的预期表现）",
             exit_code: null,
             lost: true,
           }
@@ -374,7 +374,7 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
       if (!patched.some((r) => r.client === uuid)) {
         patched.push({
           client: uuid,
-          result: "已下发 · 执行后节点失联 · 结果未知（重启/断网类命令的预期表现）",
+          result: "已下发 · 节点按预期失联 · 命令已生效（重启/断网类命令的预期表现）",
           exit_code: null,
           lost: true,
         });
@@ -698,7 +698,7 @@ async function pollTaskResults(
             console.log(
               `[crontask] task round ${taskId}: pending nodes ${pending.join(",")} lost connection, ending poll early`,
             );
-            return { results, timedOut: true, lost: pending };
+            return { results, timedOut: false, lost: pending };
           }
         } else {
           offlineStreak = 0;

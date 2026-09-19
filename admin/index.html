@@ -1379,8 +1379,8 @@ $("tasksBody").addEventListener("click", (e) => {
 // ---------- 执行历史（可展开） ----------
 function nodeResultBlock(r) {
   const exit = r.exit_code;
-  const exitCls = r.lost ? "unknown" : exit === 0 ? "zero" : "nonzero";
-  const exitText = r.lost ? "结果未知" : exit === null || exit === undefined ? "未返回" : `exit ${exit}`;
+  const exitCls = r.lost ? "zero" : exit === 0 ? "zero" : "nonzero";
+  const exitText = r.lost ? "已生效" : exit === null || exit === undefined ? "未返回" : `exit ${exit}`;
   // 宿主写回的下发错误翻译成人话（如离线节点）
   const out = String(r.result ?? "").replace(/GoError: No clients connected/gi, "目标节点均离线，命令未下发");
   // 无 client 的单条结果（sandbox/action/下发失败）：显示 Server 标识

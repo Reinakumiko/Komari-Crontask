@@ -501,7 +501,8 @@ test("lost node (reboot-style) ends poll early as unknown, not failure", async (
     assert.equal(row.client, "lost-1");
     assert.equal(row.lost, true);
     assert.equal(row.exit_code, null); // 未知，不是失败码
-    assert.match(row.result, /结果未知/);
+    assert.match(row.result, /命令已生效/);
+    assert.equal(entry.timedOut, false, "lost ending is not a timeout");
     // 「不算失败」的证据：无失败通知发出（isFailure 对 lost-only 轮返回 false）
     assert.equal(host.notifications.length, 0, "no failure notification for lost nodes");
   } finally {
