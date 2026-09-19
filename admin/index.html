@@ -148,7 +148,12 @@
   .h-exit { font-family: var(--mono); font-size: 11.5px; padding: 1px 8px; border-radius: 6px; }
   .h-exit.zero { background: var(--success-soft); color: var(--success); }
   .h-exit.nonzero { background: var(--danger-soft); color: var(--danger); }
-  .h-exit.unknown { background: #f1f5f9; color: var(--muted); }
+  .h-exit.inferred { background: #f1f5f9; color: var(--muted); }
+  /* 命令模板快捷按钮 */
+  .cmd-templates { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
+  .tpl-btn { padding: 1px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px;
+             background: #fff; color: var(--muted); cursor: pointer; font-family: inherit; }
+  .tpl-btn:hover { border-color: var(--primary); color: var(--primary); }
   .h-out { background: #0f172a; color: #e2e8f0; font-family: var(--mono); font-size: 12px;
            line-height: 1.55; border-radius: 8px; padding: 10px 12px;
            white-space: pre-wrap; word-break: break-all; max-height: 260px; overflow-y: auto; }
@@ -584,8 +589,14 @@
           <button type="button" class="sbx-reprobe" id="btnReprobe">重新检测</button>
         </div>
         <div class="field" id="commandField">
-          <label for="f_command">命令</label>
-          <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令" required></textarea>
+          <label for="f_command">命令
+            <span class="cmd-templates">
+              <button type="button" class="tpl-btn" data-tpl="direct" title="直接执行：失败即时回报（连接还在），成功靠抢报+默认视为成功">直接执行</button>
+              <button type="button" class="tpl-btn" data-tpl="background" title="后台执行：立即返回，断联命令不阻塞上报">后台执行</button>
+              <button type="button" class="tpl-btn" data-tpl="delay" title="延迟执行：给上报留 30s 窗口后再执行断联操作（注意：延迟后的执行失败无法回报）">延迟执行</button>
+            </span>
+          </label>
+          <textarea id="f_command" class="term" placeholder="# 在每个目标节点上执行的 shell 命令&#10;# 断联类命令（reboot/重启网卡）可用上方模板选择写法" required></textarea>
         </div>
         <div id="sandboxFields" style="display:none">
           <div class="field">
@@ -657,6 +668,13 @@
               <span class="opt-desc">任一节点退出码非 0 或超时，通过已配置渠道发送告警</span>
             </span>
             <span class="switch"><input type="checkbox" id="f_notify" checked><span class="slider"></span></span>
+          </label>
+          <label class="opt-row" id="notifyInferredRow">
+            <span class="opt-text">
+              <span class="opt-title">推断成功时通知</span>
+              <span class="opt-desc">断联命令未回报（已视为成功）时也发一条说明性通知，重要任务建议开启</span>
+            </span>
+            <span class="switch"><input type="checkbox" id="f_notify_inferred"><span class="slider"></span></span>
           </label>
           <label class="opt-row">
             <span class="opt-text">
@@ -1155,6 +1173,7 @@ function openForm(task) {
   $("f_command").value = task?.command ?? "";
   $("f_timeout").value = task?.timeout ?? 300;
   $("f_notify").checked = task ? !!task.notify : true;
+  $("f_notify_inferred").checked = task ? !!task.notifyInferred : false;
   $("f_enabled").checked = task ? !!task.enabled : true;
   $("f_sandbox_command").value = task?.sandboxCommand ?? "";
   $("f_sandbox_network").checked = task ? !!task.sandboxNetwork : false;
@@ -1184,6 +1203,7 @@ function setType(t) {
   $("f_command").required = isCmd;
   $("f_sandbox_command").required = isSbx;
   $("f_action_method").required = isAct;
+  $("notifyInferredRow").style.display = isCmd ? "" : "none";
   $("sbxEnv").style.display = isSbx ? "flex" : "none";
   if (isSbx) loadSandboxEnv(false);
 }
@@ -1286,6 +1306,7 @@ async function saveForm(e) {
     actionParams: targetType === "action" ? ($("f_action_params").value.trim() || "{}") : "{}",
     timeout: Number($("f_timeout").value || 300),
     notify: $("f_notify").checked,
+    notifyInferred: $("f_notify_inferred").checked,
     enabled: $("f_enabled").checked,
     _operator: CURRENT_USER,
   };
@@ -1379,10 +1400,11 @@ $("tasksBody").addEventListener("click", (e) => {
 // ---------- 执行历史（可展开） ----------
 function nodeResultBlock(r) {
   const exit = r.exit_code;
-  // 失联=已生效；未返回（无失败回报）=视为成功；只有明确非 0 才是失败
-  const exitCls = exit !== null && exit !== undefined && exit !== 0 ? "nonzero" : "zero";
-  const exitText = r.lost ? "已生效"
-    : exit === null || exit === undefined ? "视为成功"
+  // 推断（失联/未回报）与确认（真实 exit code）视觉区分：推断=中性灰，确认=绿/红
+  const inferred = r.lost || exit === null || exit === undefined;
+  const exitCls = inferred ? "inferred" : exit !== 0 ? "nonzero" : "zero";
+  const exitText = r.lost ? "已生效·推断"
+    : exit === null || exit === undefined ? "视为成功·推断"
     : `exit ${exit}`;
   // 宿主写回的下发错误翻译成人话（如离线节点）
   const out = String(r.result ?? "").replace(/GoError: No clients connected/gi, "目标节点均离线，命令未下发");
@@ -1402,10 +1424,11 @@ function nodeResultBlock(r) {
 function historyItem(h, open) {
   // 语义：只有明确的失败回报（exit_code 非 0）才失败；未返回/失联/超时视为成功
   const failed = h.results.some((r) => r.exit_code !== null && r.exit_code !== undefined && r.exit_code !== 0);
+  const anyInferred = h.results.some((r) => r.lost || r.exit_code === null || r.exit_code === undefined);
   const verdict = (failed
     ? '<span class="badge fail">失败</span>'
-    : h.timedOut
-      ? '<span class="badge ok">成功</span><span class="badge warn">超时未返</span>'
+    : anyInferred
+      ? '<span class="badge ok">成功</span><span class="badge off">推断</span>'
       : '<span class="badge ok">成功</span>')
     + (h.type === "sandbox" ? ' <span class="badge warn">沙箱</span>' : h.type === "action" ? ' <span class="badge info">系统功能</span>' : "");
   const absTime = new Date(h.ts).toLocaleString();
@@ -1546,6 +1569,37 @@ $("btnNew").addEventListener("click", () => openForm(null));
 $("typeTabs").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-t]");
   if (btn) setType(btn.dataset.t);
+});
+// 命令模板：把当前命令包装成对应写法（已是该写法则解包还原）
+const TPL_PATTERNS = {
+  direct: { re: null, wrap: (c) => c },
+  background: { re: /^\((.*)\)\s*(?:>\S+\s*\S+\s*)?&\s*$/, wrap: (c) => `(${c}) >/dev/null 2>&1 &` },
+  delay: { re: /^\(\s*sleep\s+(\d+)\s*;\s*(.*)\s*\)\s*(?:>\S+\s*\S+\s*)?&\s*$/, wrap: (c) => `(sleep 30; ${c}) >/dev/null 2>&1 &` },
+};
+document.querySelectorAll(".tpl-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const mode = btn.dataset.tpl;
+    const ta = $("f_command");
+    const raw = ta.value.trim();
+    if (!raw) { toast("先填写命令，再套用模板"); return; }
+    if (mode === "direct") {
+      // 解包任何包装
+      for (const p of [TPL_PATTERNS.background.re, TPL_PATTERNS.delay.re]) {
+        if (p) { const m = raw.match(p); if (m) { ta.value = m[1] ?? m[2]; toast("已还原为直接执行"); return; } }
+      }
+      toast("当前已是直接执行写法");
+      return;
+    }
+    const tpl = TPL_PATTERNS[mode];
+    if (tpl.re && tpl.re.test(raw)) { toast("当前已是该写法"); return; }
+    // 先解包旧包装再套新模板
+    let inner = raw;
+    for (const p of [TPL_PATTERNS.background.re, TPL_PATTERNS.delay.re]) {
+      if (p) { const m = raw.match(p); if (m) { inner = m[1] ?? m[2]; break; } }
+    }
+    ta.value = tpl.wrap(inner);
+    toast(mode === "background" ? "已包装为后台执行" : "已包装为延迟 30s 执行");
+  });
 });
 $("btnReprobe").addEventListener("click", () => loadSandboxEnv(true));
 $("btnClose").addEventListener("click", closeForm);

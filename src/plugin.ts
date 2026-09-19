@@ -201,14 +201,12 @@ function cronTick(now = new Date()): void {
 
 /** Registers server.cron for every unique expression in the task list. */
 function syncCrons(tasks: Task[]): void {
-  let needsTzTick = false;
   for (const task of tasks) {
     if (!task.enabled) continue;
     const expr = normalizeCronExpression(task.cron);
     if (expr === "") continue;
     // 自定义时区任务：不注册宿主 cron（宿主只会按服务器时区触发），走 tz tick
     if (parseTzOffsetMinutes(task.tz) !== null) {
-      needsTzTick = true;
       continue;
     }
     if (registeredCrons.has(expr)) continue;
@@ -220,13 +218,14 @@ function syncCrons(tasks: Task[]): void {
       console.log(`[crontask] bad cron "${expr}": ${String(err)}`);
     }
   }
-  if (needsTzTick && !registeredCrons.has(TZ_TICK_EXPR)) {
+  if (!registeredCrons.has(TZ_TICK_EXPR)) {
+    // 常驻分钟心跳：时区任务调度 + 失联未恢复告警（两者共用一次注册）
     try {
-      server.cron(TZ_TICK_EXPR, () => cronTick());
+      server.cron(TZ_TICK_EXPR, () => { cronTick(); void recoveryHeartbeat(); });
       registeredCrons.add(TZ_TICK_EXPR);
-      console.log(`[crontask] scheduled tz tick ${TZ_TICK_EXPR}`);
+      console.log(`[crontask] scheduled minute heartbeat (tz scheduling + recovery) ${TZ_TICK_EXPR}`);
     } catch (err) {
-      console.log(`[crontask] tz tick registration failed: ${String(err)}`);
+      console.log(`[crontask] heartbeat registration failed: ${String(err)}`);
     }
   }
 }
@@ -400,7 +399,66 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
     const message = await buildFailureMessage(entry);
     await notifyFailure(effective, message, effective.nodes);
   } else {
-    console.log(`[crontask] task ${effective.id} round ${taskId} ok (${results.length} results)`);
+    // 推断成功（失联/未回报视为成功）：按任务开关发送说明性通知
+    const inferred = results.filter(
+      (r) => r.lost || r.exit_code === null || r.exit_code === undefined,
+    );
+    if (inferred.length > 0 && effective.notifyInferred) {
+      const nodes = await nodeInfoMap();
+      const names = inferred.map((r) => nodes.get(r.client)?.name ?? r.client).join("、");
+      await notifyFailure(
+        effective,
+        `[Cron Task] ${effective.name}\n已按预期视为成功：${names} 未回报（命令可能已生效断联，如 reboot/重启网络）`,
+      );
+    }
+    // 失联未恢复跟踪：登记这些节点，心跳超窗未恢复则告警
+    for (const r of inferred) {
+      trackRecovery(effective, r.client);
+    }
+    console.log(`[crontask] task ${effective.id} round ${taskId} ok (${results.length} results, ${inferred.length} inferred)`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 失联未恢复告警：断联命令生效后节点应离线并在窗口期内回归；超窗未归则告警
+// ---------------------------------------------------------------------------
+const RECOVERY_WINDOW_MS = 15 * 60 * 1000;
+type RecoveryTracker = { taskName: string; since: number; notified: boolean };
+const pendingRecovery = new Map<string, RecoveryTracker>();
+
+/** 登记一个「断联后应恢复」的节点 */
+function trackRecovery(task: Task, client: string): void {
+  pendingRecovery.set(client, { taskName: task.name, since: Date.now(), notified: false });
+}
+
+/** 心跳：检查登记节点的恢复状态（在线=已恢复；离线且超窗=告警一次） */
+async function recoveryHeartbeat(): Promise<void> {
+  if (pendingRecovery.size === 0) return;
+  let status: Record<string, { online?: boolean }> = {};
+  try {
+    status = await server.call<Record<string, { online?: boolean }>>(
+      "common:getNodesLatestStatus",
+      {},
+    );
+  } catch {
+    return; // 状态查询失败不影响下轮
+  }
+  for (const [client, tracker] of [...pendingRecovery.entries()]) {
+    const rec = status[client];
+    if (rec?.online) {
+      pendingRecovery.delete(client); // 已恢复（或从未离线）——视为成功闭环
+      continue;
+    }
+    if (!tracker.notified && Date.now() - tracker.since > RECOVERY_WINDOW_MS) {
+      tracker.notified = true;
+      const nodes = await nodeInfoMap();
+      const name = nodes.get(client)?.name ?? client;
+      await notifyFailure(
+        { name: tracker.taskName } as Task,
+        `[Cron Task] ${tracker.taskName}\n节点 ${name} 在执行断联命令后失联超过 ${Math.round(RECOVERY_WINDOW_MS / 60000)} 分钟未恢复，请检查机器是否正常启动`,
+        [client],
+      );
+    }
   }
 }
 

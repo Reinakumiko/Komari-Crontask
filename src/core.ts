@@ -60,6 +60,8 @@ export type Task = {
   actionParams: string; // JSON 字符串
   timeout: number;
   notify: boolean;
+  /** command: 推断成功（失联/未回报视为成功）时也发送通知，默认关 */
+  notifyInferred: boolean;
   enabled: boolean;
   createdAt: string;
 };
@@ -257,6 +259,7 @@ export function taskFromInput(
     actionParams: asString(input.actionParams, "{}"),
     timeout: asNumber(input.timeout, 300),
     notify: asBoolean(input.notify, true),
+    notifyInferred: asBoolean(input.notifyInferred, false),
     enabled: asBoolean(input.enabled, true),
     createdAt: asString(input.createdAt, now),
   };

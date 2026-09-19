@@ -573,6 +573,7 @@
       actionParams: asString(input.actionParams, "{}"),
       timeout: asNumber(input.timeout, 300),
       notify: asBoolean(input.notify, true),
+      notifyInferred: asBoolean(input.notifyInferred, false),
       enabled: asBoolean(input.enabled, true),
       createdAt: asString(input.createdAt, now)
     };
@@ -751,13 +752,11 @@
     }
   }
   function syncCrons(tasks) {
-    let needsTzTick = false;
     for (const task of tasks) {
       if (!task.enabled) continue;
       const expr = normalizeCronExpression(task.cron);
       if (expr === "") continue;
       if (parseTzOffsetMinutes(task.tz) !== null) {
-        needsTzTick = true;
         continue;
       }
       if (registeredCrons.has(expr)) continue;
@@ -769,13 +768,16 @@
         console.log(`[crontask] bad cron "${expr}": ${String(err)}`);
       }
     }
-    if (needsTzTick && !registeredCrons.has(TZ_TICK_EXPR)) {
+    if (!registeredCrons.has(TZ_TICK_EXPR)) {
       try {
-        import_plugin_sdk.server.cron(TZ_TICK_EXPR, () => cronTick());
+        import_plugin_sdk.server.cron(TZ_TICK_EXPR, () => {
+          cronTick();
+          void recoveryHeartbeat();
+        });
         registeredCrons.add(TZ_TICK_EXPR);
-        console.log(`[crontask] scheduled tz tick ${TZ_TICK_EXPR}`);
+        console.log(`[crontask] scheduled minute heartbeat (tz scheduling + recovery) ${TZ_TICK_EXPR}`);
       } catch (err) {
-        console.log(`[crontask] tz tick registration failed: ${String(err)}`);
+        console.log(`[crontask] heartbeat registration failed: ${String(err)}`);
       }
     }
   }
@@ -918,7 +920,57 @@
       const message = await buildFailureMessage(entry);
       await notifyFailure(effective, message, effective.nodes);
     } else {
-      console.log(`[crontask] task ${effective.id} round ${taskId} ok (${results.length} results)`);
+      const inferred = results.filter(
+        (r) => r.lost || r.exit_code === null || r.exit_code === void 0
+      );
+      if (inferred.length > 0 && effective.notifyInferred) {
+        const nodes = await nodeInfoMap();
+        const names = inferred.map((r) => nodes.get(r.client)?.name ?? r.client).join("\u3001");
+        await notifyFailure(
+          effective,
+          `[Cron Task] ${effective.name}
+\u5DF2\u6309\u9884\u671F\u89C6\u4E3A\u6210\u529F\uFF1A${names} \u672A\u56DE\u62A5\uFF08\u547D\u4EE4\u53EF\u80FD\u5DF2\u751F\u6548\u65AD\u8054\uFF0C\u5982 reboot/\u91CD\u542F\u7F51\u7EDC\uFF09`
+        );
+      }
+      for (const r of inferred) {
+        trackRecovery(effective, r.client);
+      }
+      console.log(`[crontask] task ${effective.id} round ${taskId} ok (${results.length} results, ${inferred.length} inferred)`);
+    }
+  }
+  var RECOVERY_WINDOW_MS = 15 * 60 * 1e3;
+  var pendingRecovery = /* @__PURE__ */ new Map();
+  function trackRecovery(task, client) {
+    pendingRecovery.set(client, { taskName: task.name, since: Date.now(), notified: false });
+  }
+  async function recoveryHeartbeat() {
+    if (pendingRecovery.size === 0) return;
+    let status = {};
+    try {
+      status = await import_plugin_sdk.server.call(
+        "common:getNodesLatestStatus",
+        {}
+      );
+    } catch {
+      return;
+    }
+    for (const [client, tracker] of [...pendingRecovery.entries()]) {
+      const rec = status[client];
+      if (rec?.online) {
+        pendingRecovery.delete(client);
+        continue;
+      }
+      if (!tracker.notified && Date.now() - tracker.since > RECOVERY_WINDOW_MS) {
+        tracker.notified = true;
+        const nodes = await nodeInfoMap();
+        const name = nodes.get(client)?.name ?? client;
+        await notifyFailure(
+          { name: tracker.taskName },
+          `[Cron Task] ${tracker.taskName}
+\u8282\u70B9 ${name} \u5728\u6267\u884C\u65AD\u8054\u547D\u4EE4\u540E\u5931\u8054\u8D85\u8FC7 ${Math.round(RECOVERY_WINDOW_MS / 6e4)} \u5206\u949F\u672A\u6062\u590D\uFF0C\u8BF7\u68C0\u67E5\u673A\u5668\u662F\u5426\u6B63\u5E38\u542F\u52A8`,
+          [client]
+        );
+      }
     }
   }
   function ensureExecutable(...paths) {

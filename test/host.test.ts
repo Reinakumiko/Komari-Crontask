@@ -180,8 +180,8 @@ test("load() registers crons for enabled tasks only", async () => {
     makeTask({ id: "b", enabled: false, cron: "0 4 * * *" }),
   ]);
   await bootPlugin();
-  assert.equal(host.cronJobs.length, 1);
-  assert.equal(host.cronJobs[0].expr, "0 3 * * *");
+  assert.equal(host.cronJobs.length, 2); // 任务 cron + 常驻恢复心跳
+  assert.ok(host.cronJobs.some(j => j.expr === "0 3 * * *"));
 });
 
 test("load() normalizes @every1m compact expression", async () => {
@@ -313,7 +313,7 @@ test("crontask.save validates and rejects empty commands", async () => {
 test("crontask.setEnabled toggles and re-load registers accordingly", async () => {
   await writeTasks([makeTask({ id: "a" })]);
   await bootPlugin();
-  assert.equal(host.cronJobs.length, 1);
+  assert.equal(host.cronJobs.length, 2); // 任务 cron + 常驻恢复心跳
   const res = await rpc("crontask.setEnabled", { id: "a", enabled: false });
   assert.equal(res.ok, true);
   const tasks = await readTasks();

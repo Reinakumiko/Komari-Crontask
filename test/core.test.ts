@@ -92,7 +92,7 @@ test("validateTask: rejects missing fields", () => {
     id: "x", name: "A", cron: "0 3 * * *", command: "echo", type: "command",
     nodes: ["n1"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}",
-    timeout: 60, notify: true, enabled: true, createdAt: "",
+    timeout: 60, notify: true, notifyInferred: false, enabled: true, createdAt: "",
   };
   assert.equal(validateTask({ ...base }), null);
   assert.ok(validateTask({ ...base, name: "" })?.includes("name"));
@@ -119,7 +119,7 @@ test("validateTask: sandbox and action specific checks", () => {
   const sb: Task = {
     id: "x", name: "S", cron: "0 3 * * *", type: "sandbox",
     command: "", nodes: [], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
-    actionMethod: "", actionParams: "{}", timeout: 60, notify: true, enabled: true, createdAt: "",
+    actionMethod: "", actionParams: "{}", timeout: 60, notify: true, notifyInferred: false, enabled: true, createdAt: "",
   };
   assert.match(validateTask(sb) ?? "", /Sandbox/);
   assert.equal(validateTask({ ...sb, sandboxCommand: "uptime" }), null);
@@ -127,7 +127,7 @@ test("validateTask: sandbox and action specific checks", () => {
   const ac: Task = {
     id: "x", name: "A", cron: "0 3 * * *", type: "action",
     command: "", nodes: [], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
-    actionMethod: "", actionParams: "{}", timeout: 60, notify: true, enabled: true, createdAt: "",
+    actionMethod: "", actionParams: "{}", timeout: 60, notify: true, notifyInferred: false, enabled: true, createdAt: "",
   };
   assert.match(validateTask(ac) ?? "", /Action method/);
   assert.equal(validateTask({ ...ac, actionMethod: "admin:vacuumDatabase", actionParams: "not-json" }), "Action params must be valid JSON");
@@ -139,7 +139,7 @@ test("validateTask: allows @every style", () => {
     id: "x", name: "A", cron: "@every 1m", command: "echo", type: "command",
     nodes: ["n1"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}",
-    timeout: 60, notify: true, enabled: true, createdAt: "",
+    timeout: 60, notify: true, notifyInferred: false, enabled: true, createdAt: "",
   };
   assert.equal(validateTask(base), null);
 });
@@ -151,7 +151,7 @@ test("buildHistoryEntry: maps results and carries round metadata", () => {
     id: "t1", name: "Alpha", cron: "0 3 * * *", command: "echo a", type: "command",
     nodes: ["n1", "n2"], sandboxCommand: "", sandboxNetwork: false, sandboxStrict: true, tz: "",
     actionMethod: "", actionParams: "{}",
-    timeout: 60, notify: true, enabled: true, createdAt: "",
+    timeout: 60, notify: true, notifyInferred: false, enabled: true, createdAt: "",
   };
   const entry = buildHistoryEntry(task, "exec-1", [
     { client: "n1", result: "out1", exit_code: 0 },
