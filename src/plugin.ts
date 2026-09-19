@@ -381,13 +381,34 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
     }
     results.splice(0, results.length, ...patched);
   }
-  // 超时仍未返回（节点在线但没回话）：无失败回报，视为成功。
+  // 超时仍未返回：按节点当前在线状态区分两种本质不同的超时——
+  //   断连超时（节点离线）：reboot 类命令生效断联 → 视为成功（lost）
+  //   真超时（节点在线）：命令 hang 死或超过等待窗口 → stuck 警告
   if (timedOut) {
+    let status: Record<string, unknown> = {};
+    try {
+      status = await server.call<Record<string, unknown>>(
+        "common:getNodesLatestStatus",
+        {},
+      );
+    } catch { /* 查询失败按离线处理（保守视为成功） */ }
     for (let i = 0; i < results.length; i++) {
-      if (results[i].exit_code === null || results[i].exit_code === undefined) {
+      const r = results[i];
+      if (r.exit_code !== null && r.exit_code !== undefined) continue;
+      if (status[r.client]) {
+        // 节点在线：真超时——命令可能仍在执行或已挂起
         results[i] = {
-          ...results[i],
-          result: "未返回 · 无失败回报 · 视为成功",
+          ...r,
+          result: "超时未返回 · 节点仍在线 · 命令可能仍在执行或已挂起（真超时）",
+          stuck: true,
+        };
+      } else {
+        // 节点离线：断联超时——视为成功
+        results[i] = {
+          ...r,
+          result: "已下发 · 节点按预期失联 · 命令已生效（重启/断网类命令的预期表现）",
+          exit_code: null,
+          lost: true,
         };
       }
     }

@@ -11,6 +11,8 @@ export type TaskResult = {
   finished_at?: string;
   /** true = 命令下发后节点失联，结果未知（重启/断网类命令的预期表现），不算失败 */
   lost?: boolean;
+  /** true = 超时未返回但节点仍在线（命令 hang 或执行超过等待窗口），真超时警告 */
+  stuck?: boolean;
 };
 
 /** 单次执行结果（统一形状：command 有节点结果，sandbox/action 单条） */
@@ -338,6 +340,7 @@ export function buildHistoryEntry(
       result: r.result,
       exit_code: r.exit_code,
       ...(r.lost ? { lost: true } : {}),
+      ...(r.stuck ? { stuck: true } : {}),
     })),
   };
 }

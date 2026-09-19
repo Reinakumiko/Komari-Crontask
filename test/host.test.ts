@@ -509,3 +509,32 @@ test("lost node (reboot-style) ends poll early as unknown, not failure", async (
     delete (globalThis as Record<string, unknown>).__crontaskPollTuning;
   }
 });
+
+test("timeout with node still online marks stuck (real timeout), not inferred success", async () => {
+  // 加速轮询：10ms 间隔，超时 1 秒
+  (globalThis as Record<string, unknown>).__crontaskPollTuning = { pollIntervalMs: 10 };
+  try {
+    await writeTasks([]);
+    await bootPlugin();
+    // n1 在 getNodesLatestStatus 里（在线），结果行永远 null → 真超时
+    host.taskResults["tid-1"] = [{ client: "n1", result: "", exit_code: null }];
+    const saved = await rpc("crontask.save", makeTask({
+      id: "", name: "HangJob", command: "sleep 9999", nodes: ["n1"], timeout: 1,
+    }));
+    assert.equal(saved.ok, true);
+    const list = await rpc("crontask.list");
+    await rpc("crontask.run", { id: list.tasks[0].id });
+    // 等超时（1s）+ 处理余量
+    await new Promise((r) => setTimeout(r, 1600));
+    const history = await rpc("crontask.history", { limit: 5 });
+    const entry = history.history.find((h) => h.name === "HangJob");
+    assert.ok(entry, "stuck round should be recorded");
+    const row = entry.results[0];
+    assert.equal(row.stuck, true, "online node timeout must be marked stuck");
+    assert.equal(row.lost, undefined, "must not be marked lost");
+    assert.match(row.result, /真超时/);
+    assert.equal(entry.timedOut, true);
+  } finally {
+    delete (globalThis as Record<string, unknown>).__crontaskPollTuning;
+  }
+});

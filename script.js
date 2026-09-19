@@ -635,7 +635,8 @@
         client: r.client,
         result: r.result,
         exit_code: r.exit_code,
-        ...r.lost ? { lost: true } : {}
+        ...r.lost ? { lost: true } : {},
+        ...r.stuck ? { stuck: true } : {}
       }))
     };
   }
@@ -905,11 +906,29 @@
       results.splice(0, results.length, ...patched);
     }
     if (timedOut) {
+      let status = {};
+      try {
+        status = await import_plugin_sdk.server.call(
+          "common:getNodesLatestStatus",
+          {}
+        );
+      } catch {
+      }
       for (let i = 0; i < results.length; i++) {
-        if (results[i].exit_code === null || results[i].exit_code === void 0) {
+        const r = results[i];
+        if (r.exit_code !== null && r.exit_code !== void 0) continue;
+        if (status[r.client]) {
           results[i] = {
-            ...results[i],
-            result: "\u672A\u8FD4\u56DE \xB7 \u65E0\u5931\u8D25\u56DE\u62A5 \xB7 \u89C6\u4E3A\u6210\u529F"
+            ...r,
+            result: "\u8D85\u65F6\u672A\u8FD4\u56DE \xB7 \u8282\u70B9\u4ECD\u5728\u7EBF \xB7 \u547D\u4EE4\u53EF\u80FD\u4ECD\u5728\u6267\u884C\u6216\u5DF2\u6302\u8D77\uFF08\u771F\u8D85\u65F6\uFF09",
+            stuck: true
+          };
+        } else {
+          results[i] = {
+            ...r,
+            result: "\u5DF2\u4E0B\u53D1 \xB7 \u8282\u70B9\u6309\u9884\u671F\u5931\u8054 \xB7 \u547D\u4EE4\u5DF2\u751F\u6548\uFF08\u91CD\u542F/\u65AD\u7F51\u7C7B\u547D\u4EE4\u7684\u9884\u671F\u8868\u73B0\uFF09",
+            exit_code: null,
+            lost: true
           };
         }
       }
