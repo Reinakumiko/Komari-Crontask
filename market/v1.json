@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "updated_at": "2026-09-12T15:27:07.000Z",
+  "updated_at": "2026-09-19T16:55:19.000Z",
   "plugins": [
     {
       "name": {
@@ -14,12 +14,12 @@
         "zh-TW": "依 cron 計畫在選定節點上定時執行 shell 指令，回收每個節點的執行結果，失敗時發送通知。內建任務管理頁面。",
         "en": "Run commands on nodes on cron schedules, collect per-node results, and notify on failure. Includes a built-in management page."
       },
-      "version": "0.5.5",
+      "version": "0.5.6",
       "author": "Reinakumiko",
       "komari": ">=1.4.3",
       "url": "https://github.com/Reinakumiko/Komari-Crontask",
-      "download": "https://github.com/Reinakumiko/Komari-Crontask/releases/download/v0.5.5/crontask-0.5.5.zip",
-      "sha256": "0138600266814d08d43ddabb32308399f24d164321bb076a4bc9a8c4cb3831d3"
+      "download": "https://github.com/Reinakumiko/Komari-Crontask/releases/download/v0.5.6/crontask-0.5.6.zip",
+      "sha256": "6e00816b74e924afaf8d15a2c7c57c62f9dc2b02ca85e90523cfd2f1448f23f9"
     }
   ]
 }
