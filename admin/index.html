@@ -1401,9 +1401,10 @@ $("tasksBody").addEventListener("click", (e) => {
 // ---------- 执行历史（可展开） ----------
 function nodeResultBlock(r) {
   const exit = r.exit_code;
-  // 推断（失联=视为成功）与真超时（节点在线未返回）与确认（真实 exit）三态区分
-  const exitCls = r.stuck ? "stuck" : r.lost || exit === null || exit === undefined ? "inferred" : exit !== 0 ? "nonzero" : "zero";
-  const exitText = r.stuck ? "超时未返"
+  // 四态：离线未执行（黄）/ 真超时（黄）/ 断联推断（灰）/ 确认（绿/红）
+  const exitCls = r.offline ? "stuck" : r.stuck ? "stuck" : r.lost || exit === null || exit === undefined ? "inferred" : exit !== 0 ? "nonzero" : "zero";
+  const exitText = r.offline ? "离线未执行"
+    : r.stuck ? "超时未返"
     : r.lost ? "已生效·推断"
     : exit === null || exit === undefined ? "视为成功·推断"
     : `exit ${exit}`;
@@ -1423,17 +1424,20 @@ function nodeResultBlock(r) {
   </div>`;
 }
 function historyItem(h, open) {
-  // 语义：只有明确的失败回报（exit_code 非 0）才失败；断联推断视为成功；真超时（节点在线未返回）警告
-  const failed = h.results.some((r) => r.exit_code !== null && r.exit_code !== undefined && r.exit_code !== 0);
+  // 语义：明确失败回报（非 0）= 失败；离线未执行/断联推断 = 非失败警告；真超时 = 警告
+  const failed = h.results.some((r) => r.exit_code !== null && r.exit_code !== undefined && r.exit_code !== 0 && !r.lost && !r.offline);
   const anyStuck = h.results.some((r) => r.stuck);
-  const anyInferred = h.results.some((r) => r.lost || (!r.stuck && (r.exit_code === null || r.exit_code === undefined)));
+  const anyOffline = h.results.some((r) => r.offline);
+  const anyInferred = h.results.some((r) => r.lost || (!r.stuck && !r.offline && (r.exit_code === null || r.exit_code === undefined)));
   const verdict = (failed
     ? '<span class="badge fail">失败</span>'
     : anyStuck
       ? '<span class="badge warn">超时</span>'
-      : anyInferred
-        ? '<span class="badge ok">成功</span><span class="badge off">推断</span>'
-        : '<span class="badge ok">成功</span>')
+      : anyOffline
+        ? '<span class="badge warn">部分未执行</span>'
+        : anyInferred
+          ? '<span class="badge ok">成功</span><span class="badge off">推断</span>'
+          : '<span class="badge ok">成功</span>')
     + (h.type === "sandbox" ? ' <span class="badge warn">沙箱</span>' : h.type === "action" ? ' <span class="badge info">系统功能</span>' : "");
   const absTime = new Date(h.ts).toLocaleString();
   const results = h.results.length

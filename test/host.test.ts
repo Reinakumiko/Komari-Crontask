@@ -538,3 +538,30 @@ test("timeout with node still online marks stuck (real timeout), not inferred su
     delete (globalThis as Record<string, unknown>).__crontaskPollTuning;
   }
 });
+
+test("komari-written offline row (-1, Client offline!) is warning not failure", async () => {
+  await writeTasks([]);
+  await bootPlugin();
+  // 模拟 komari 对离线节点的代写行 + 在线节点的成功行
+  host.taskResults["tid-1"] = [
+    { client: "n1", result: "ok", exit_code: 0 },
+    { client: "offline-node", result: "Client offline!", exit_code: -1 },
+  ];
+  const saved = await rpc("crontask.save", makeTask({
+    id: "", name: "PartialJob", command: "echo x", nodes: ["n1", "offline-node"],
+  }));
+  assert.equal(saved.ok, true);
+  const list = await rpc("crontask.list");
+  await rpc("crontask.run", { id: list.tasks[0].id });
+  await new Promise((r) => setTimeout(r, 150));
+  const history = await rpc("crontask.history", { limit: 5 });
+  const entry = history.history.find((h) => h.name === "PartialJob");
+  assert.ok(entry, "partial-offline round should be recorded");
+  const off = entry.results.find((r) => r.client === "offline-node");
+  const ok = entry.results.find((r) => r.client === "n1");
+  assert.equal(off.offline, true, "komari-written offline row must be marked offline");
+  assert.match(off.result, /节点离线，命令未执行/);
+  assert.equal(ok.exit_code, 0);
+  // 离线未执行不算失败：在线节点成功 + 离线节点 → 无失败通知
+  assert.equal(host.notifications.length, 0, "offline-only rows must not trigger failure notification");
+});

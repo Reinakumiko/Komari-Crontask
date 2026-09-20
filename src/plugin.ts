@@ -413,6 +413,17 @@ async function dispatchRemoteTask(effective: Task): Promise<void> {
       }
     }
   }
+  // komari 代写行与 agent 拒绝文案的语义化处理：
+  //   "Client offline!"（komari 代写，命令未到节点）→ offline 标记，不算失败
+  //   "Remote control is disabled."（agent 明确拒绝）→ 保持失败，仅人话化文案
+  for (let i = 0; i < results.length; i++) {
+    const r = results[i];
+    if (typeof r.result === "string" && /Client offline!/i.test(r.result)) {
+      results[i] = { ...r, result: "节点离线，命令未执行（下发时未连接）", offline: true };
+    } else if (typeof r.result === "string" && /Remote control is disabled/i.test(r.result)) {
+      results[i] = { ...r, result: "节点已禁用远程执行（agent 启用了 DisableWebSsh），命令被拒绝" };
+    }
+  }
   const entry = buildHistoryEntry(effective, taskId, results, timedOut);
   appendHistorySync(entry);
 

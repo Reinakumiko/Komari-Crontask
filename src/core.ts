@@ -13,6 +13,8 @@ export type TaskResult = {
   lost?: boolean;
   /** true = 超时未返回但节点仍在线（命令 hang 或执行超过等待窗口），真超时警告 */
   stuck?: boolean;
+  /** true = 下发时节点离线，命令未执行（komari 代写行），非节点回报，不算失败 */
+  offline?: boolean;
 };
 
 /** 单次执行结果（统一形状：command 有节点结果，sandbox/action 单条） */
@@ -314,7 +316,12 @@ export function previewResult(result: string): string {
 export function isFailure(results: TaskResult[]): boolean {
   if (results.length === 0) return true;
   return results.some(
-    (r) => r.exit_code !== null && r.exit_code !== undefined && r.exit_code !== 0,
+    (r) =>
+      !r.lost &&
+      !r.offline &&
+      r.exit_code !== null &&
+      r.exit_code !== undefined &&
+      r.exit_code !== 0,
   );
 }
 
@@ -341,6 +348,7 @@ export function buildHistoryEntry(
       exit_code: r.exit_code,
       ...(r.lost ? { lost: true } : {}),
       ...(r.stuck ? { stuck: true } : {}),
+      ...(r.offline ? { offline: true } : {}),
     })),
   };
 }

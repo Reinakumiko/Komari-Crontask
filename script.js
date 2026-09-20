@@ -618,7 +618,7 @@
   function isFailure(results) {
     if (results.length === 0) return true;
     return results.some(
-      (r) => r.exit_code !== null && r.exit_code !== void 0 && r.exit_code !== 0
+      (r) => !r.lost && !r.offline && r.exit_code !== null && r.exit_code !== void 0 && r.exit_code !== 0
     );
   }
   function buildHistoryEntry(task, execTaskId, results, timedOut, now = (/* @__PURE__ */ new Date()).toISOString()) {
@@ -636,7 +636,8 @@
         result: r.result,
         exit_code: r.exit_code,
         ...r.lost ? { lost: true } : {},
-        ...r.stuck ? { stuck: true } : {}
+        ...r.stuck ? { stuck: true } : {},
+        ...r.offline ? { offline: true } : {}
       }))
     };
   }
@@ -931,6 +932,14 @@
             lost: true
           };
         }
+      }
+    }
+    for (let i = 0; i < results.length; i++) {
+      const r = results[i];
+      if (typeof r.result === "string" && /Client offline!/i.test(r.result)) {
+        results[i] = { ...r, result: "\u8282\u70B9\u79BB\u7EBF\uFF0C\u547D\u4EE4\u672A\u6267\u884C\uFF08\u4E0B\u53D1\u65F6\u672A\u8FDE\u63A5\uFF09", offline: true };
+      } else if (typeof r.result === "string" && /Remote control is disabled/i.test(r.result)) {
+        results[i] = { ...r, result: "\u8282\u70B9\u5DF2\u7981\u7528\u8FDC\u7A0B\u6267\u884C\uFF08agent \u542F\u7528\u4E86 DisableWebSsh\uFF09\uFF0C\u547D\u4EE4\u88AB\u62D2\u7EDD" };
       }
     }
     const entry = buildHistoryEntry(effective, taskId, results, timedOut);
