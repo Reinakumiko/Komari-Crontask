@@ -30,6 +30,8 @@
   header .actions { margin-left: auto; display: flex; gap: 8px; }
   main { max-width: 1000px; margin: 24px auto 40px; padding: 0 20px; }
 
+  /* 原生控件统一继承页面字体（部分浏览器默认回落系统字体导致不统一） */
+  button, input, select, textarea { font-family: inherit; }
   button { background: var(--primary); color: #fff; border: 0; border-radius: 8px;
            padding: 7px 14px; font-size: 13px; cursor: pointer; transition: filter .12s, background .12s; }
   button:hover { filter: brightness(1.08); }
@@ -76,7 +78,7 @@
   .badge.info { background: var(--primary-soft); color: var(--primary); }
   /* 调度时区下拉 + 任务列表时区徽标 */
   .tz-select { flex: none; border: none; border-radius: 0; max-width: 132px;
-               padding: 6px 7px; font-size: 12px; font-family: inherit;
+               padding: 6px 7px; font-size: 12px;
                color: var(--muted); background: #fff; cursor: pointer; }
   .tz-select:focus { outline: none; }
   .tz-chip { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px;
@@ -86,7 +88,7 @@
                    padding: 10px 0 12px; flex-wrap: wrap; }
   .pg-btn { min-width: 32px; height: 30px; padding: 0 9px; border: 1px solid var(--border);
             border-radius: 7px; background: #fff; color: var(--muted); font-size: 13px;
-            cursor: pointer; font-family: inherit; }
+            cursor: pointer; }
   .pg-btn:hover:not(:disabled):not(.active) { border-color: var(--primary); color: var(--primary); }
   .pg-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
   .pg-btn:disabled { opacity: .45; cursor: default; }
@@ -153,7 +155,7 @@
   /* 命令模板快捷按钮 */
   .cmd-templates { display: inline-flex; gap: 4px; margin-left: 8px; vertical-align: middle; }
   .tpl-btn { padding: 1px 8px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px;
-             background: #fff; color: var(--muted); cursor: pointer; font-family: inherit; }
+             background: #fff; color: var(--muted); cursor: pointer; }
   .tpl-btn:hover { border-color: var(--primary); color: var(--primary); }
   .h-out { background: #0f172a; color: #e2e8f0; font-family: var(--mono); font-size: 12px;
            line-height: 1.55; border-radius: 8px; padding: 10px 12px;
@@ -188,7 +190,7 @@
   label { display: block; font-size: 12.5px; margin-bottom: 5px; font-weight: 600; color: #334155; }
   input[type=text], input[type=number] {
     width: 100%; padding: 8px 11px; border: 1px solid var(--border); border-radius: 8px;
-    font-size: 13px; font-family: inherit; background: #fff; transition: border-color .12s, box-shadow .12s; }
+    font-size: 13px; background: #fff; transition: border-color .12s, box-shadow .12s; }
   input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(2,132,199,.12); }
 
   textarea.term { width: 100%; resize: vertical; min-height: 96px;
